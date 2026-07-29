@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generalize Spec Generator"
+  short_description: "Generate feature endpoint specs from source"
+  default_prompt: "Use $generalize-spec-generator to scan the requested feature and generate specs/{feature}.md with endpoint request and response schemas."
