@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: server
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+  jpa:
+    generate-ddl: off
+  datasource:
+    url: ${POSTGRES_URL}
+    password: ${POSTGRES_PASSWORD}
+    username: ${POSTGRES_USER}
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - profile
+              - email
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope:
+              - read:user
+              - user:email
+
+app:
+  env: dev
+  cors:
+    allowed-origins: ${ALLOWED_ORIGIN}
+  oauth2:
+    success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:3000/oauth2/callback}
+
+jwt:
+  secret: ${JWT_SECRET}
