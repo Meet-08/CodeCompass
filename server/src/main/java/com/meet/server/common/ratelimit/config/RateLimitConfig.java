@@ -24,18 +24,23 @@ public class RateLimitConfig {
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
-    @Bean(destroyMethod = "close")
-    public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection() {
-        try (RedisClient client = RedisClient.create(
+    @Bean(destroyMethod = "shutdown")
+    public RedisClient rateLimitRedisClient() {
+        return RedisClient.create(
                 RedisURI.builder()
                         .withHost(redisHost)
                         .withPort(redisPort)
                         .build()
-        )) {
-            return client.connect(
-                    RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE)
-            );
-        }
+        );
+    }
+
+    @Bean(destroyMethod = "close")
+    public StatefulRedisConnection<String, byte[]> rateLimitRedisConnection(
+            RedisClient client
+    ) {
+        return client.connect(
+                RedisCodec.of(StringCodec.UTF8, ByteArrayCodec.INSTANCE)
+        );
     }
 
     @Bean

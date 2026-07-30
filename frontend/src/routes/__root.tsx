@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { Toaster } from 'sonner'
 
 import TanStackQueryDevtools from '../integrations/tanstack-query/devtools'
 
@@ -27,14 +28,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'TanStack Start Starter',
+        title: 'CodeCompass',
       },
     ],
     links: [
-      {
-        rel: 'stylesheet',
-        href: appCss,
-      },
+      { rel: 'icon', href: '/favicon.ico' },
+      { rel: 'stylesheet', href: appCss },
     ],
   }),
   shellComponent: RootDocument,
@@ -48,6 +47,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster position="top-right" theme="dark" richColors closeButton />
         <TanStackDevtools
           config={{
             position: 'bottom-right',
@@ -65,3 +65,4 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     </html>
   )
 }
+
