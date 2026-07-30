@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCurrentUser, useLogout } from '#/features/auth'
 import { LogOut, User as UserIcon, Shield, Sparkles, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '#/lib/utils'
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -20,8 +21,8 @@ function Home() {
         toast.success('Signed out successfully.')
         navigate({ to: '/login' })
       },
-      onError: (err: any) => {
-        toast.error(err?.message || 'Logout failed.')
+      onError: (err: unknown) => {
+        toast.error(getApiErrorMessage(err, 'Logout failed.'))
       },
     })
   }

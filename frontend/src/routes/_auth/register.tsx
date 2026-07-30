@@ -4,6 +4,7 @@ import { User, AtSign, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Check }
 import { toast } from 'sonner'
 import { env } from '#/env'
 import { useRegister } from '#/features/auth'
+import { getApiErrorMessage } from '#/lib/utils'
 
 export const Route = createFileRoute('/_auth/register')({
   component: RegisterComponent,
@@ -72,11 +73,11 @@ function RegisterComponent() {
             toast.error(msg)
           }
         },
-        onError: (err: any) => {
-          const message =
-            err.response?.data?.message ||
-            err.message ||
+        onError: (err: unknown) => {
+          const message = getApiErrorMessage(
+            err,
             'Failed to create account. Please try again.'
+          )
           toast.error(message)
         },
       }

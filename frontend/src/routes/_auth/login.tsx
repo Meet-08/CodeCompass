@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { env } from '#/env'
 import { useLogin } from '#/features/auth'
+import { getApiErrorMessage } from '#/lib/utils'
 
 export const Route = createFileRoute('/_auth/login')({
   component: LoginComponent,
@@ -35,11 +36,11 @@ function LoginComponent() {
             toast.error(msg)
           }
         },
-        onError: (err: any) => {
-          const message =
-            err.response?.data?.message ||
-            err.message ||
+        onError: (err: unknown) => {
+          const message = getApiErrorMessage(
+            err,
             'Failed to sign in. Please check your credentials.'
+          )
           toast.error(message)
         },
       }

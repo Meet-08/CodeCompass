@@ -2,326 +2,257 @@
 
 ## Overview
 
-Auth feature handles registration, login, token refresh, logout, and current-user retrieval in `com.meet.server.feature.auth`.
+The auth feature provides local registration and login, refresh-token rotation, logout, current-user retrieval, and
+Google/GitHub OAuth2 login. Its application code is under `com.meet.server.feature.auth`; shared authentication,
+security, cookie, and exception behavior is under `com.meet.server.common`.
 
 ## Authentication and common conventions
 
-- Public routes (no authentication required): `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/refresh`, `POST /api/auth/logout`, OAuth2 routes `/oauth2/**` and `/login/**` (`SecurityConfig`).
-- Other routes require authentication (`anyRequest().authenticated()`), including `GET /api/auth/me`.
-- Response envelope for successful controller responses is `ApiResponse<T>` with fields:
-  - `success` (`boolean`)
-  - `message` (`String`)
-  - `data` (`Optional<T>`)
-- `register`, `login`, `refresh`, and `me` return `data = Optional.of(...)`; `logout` returns `data = Optional.empty()`.
-- Refresh token cookie:
-  - Name: `refresh_token`
-  - `HttpOnly: true`, `SameSite=Lax`, `Path=/`
-  - `Secure`: `true` unless `app.env=dev`
-  - Max-Age on set: `AppConfig.REFRESH_TOKEN_EXPIRY_SECONDS` (7 days)
-  - Max-Age on clear: `0`
-- CORS is enabled globally; allowed origins come from `app.cors.allowed-origins`; credentials allowed.
+- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/refresh`, and `POST /api/auth/logout` are public.
+- `GET /api/auth/me` requires an authenticated request. Other unmatched routes also require authentication.
+- `/oauth2/**` and `/login/**` are public Spring Security OAuth2 routes.
+- JWT authentication is installed by `JwtFilter`; the exact request header parsing is implemented there and is not
+  restated as a controller contract here.
+- Successful controller responses use `ApiResponse<T>`:
+
+  | Field | Type | Meaning |
+  |---|---|---|
+  | `success` | `boolean` | Whether the operation succeeded. |
+  | `message` | `string` | Human-readable result message. |
+  | `data` | `Optional<T>` | Response payload; logout uses an empty value. |
+
+- Validation and application errors are also returned through `ApiResponse` by `GlobalExceptionHandler`.
+- The refresh token is stored in an HTTP-only `refresh_token` cookie with `SameSite=Lax`, `Path=/`, and a seven-day
+  max age. `Secure` is enabled unless `app.env=dev`.
+- CORS allows configured origins, credentials, all headers, and `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS`.
+- OAuth2 provider registrations configured in source are `google` and `github`.
 
 ## HTTP endpoints
 
 ### POST /api/auth/register
 
-- Purpose: Register a new local (email/password) user and issue tokens.
+- Purpose: Create a local user and issue an access token plus refresh-token cookie.
 - Authentication/authorization: Public (`permitAll`).
+- Request body: `RegisterRequest`.
 
-Request parameters
+| Field | Type | Required | Constraints |
+|---|---|---:|---|
+| `fullName` | `string` | Yes | `@NotBlank`, maximum 100 characters |
+| `username` | `string` | Yes | `@NotBlank`, maximum 50 characters |
+| `email` | `string` | Yes | `@NotBlank`, `@Email`, maximum 255 characters |
+| `password` | `string` | Yes | `@NotBlank`, 8–100 characters |
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `fullName` | body | `string` | Yes | `@NotBlank`, `@Size(max=100)` | User display name. |
-| `username` | body | `string` | Yes | `@NotBlank`, `@Size(max=50)` | Unique username. |
-| `email` | body | `string` | Yes | `@NotBlank`, `@Email`, `@Size(max=255)` | Unique email address. |
-| `password` | body | `string` | Yes | `@NotBlank`, `@Size(min=8,max=100)` | Plain password to encode. |
-
-Request example
+Example:
 
 ```json
-{
-  "fullName": "Jane Doe",
-  "username": "jane_doe",
-  "email": "jane@example.com",
-  "password": "Str0ngPass!"
-}
+{"fullName":"Jane Doe","username":"jane_doe","email":"jane@example.com","password":"Str0ngPass!"}
 ```
 
-Responses
+Responses:
 
-| Status | Body schema | Example |
-|---|---|---|
-| `200 OK` | `ApiResponse<AuthResponse>` | `{"success":true,"message":"Registration successful","data":{"accessToken":"<jwt>","user":{"id":"<uuid>","fullName":"Jane Doe","username":"jane_doe","email":"jane@example.com","avatarUrl":null,"role":"USER"}}}` |
+| Status | Body |
+|---|---|
+| `200 OK` | `ApiResponse<AuthResponse>` with message `Registration successful`; also sets `refresh_token`. |
+| `400 Bad Request` | Validation error envelope containing field/object messages. |
+| `409 Conflict` | `ApiResponse<Void>` with the duplicate-email or duplicate-username message. |
+| `500 Internal Server Error` | Generic `ApiResponse<Void>` with message `An unexpected error occurred`. |
 
-Errors
-
-- `400 Bad Request`: validation failure on request body (`@Valid`). Response body shape is `Not specified in source`.
-- `409 Conflict` intent for duplicate email/username via `AuthException` (`EMAIL_ALREADY_EXISTS`, `USERNAME_ALREADY_EXISTS`) — `Inferred from AuthService` (no global handler found in source that guarantees this HTTP mapping).
+Domain conflict codes are `EMAIL_ALREADY_EXISTS` and `USERNAME_ALREADY_EXISTS`.
 
 ### POST /api/auth/login
 
-- Purpose: Authenticate local credentials and issue tokens.
+- Purpose: Authenticate local credentials and issue an access token plus refresh-token cookie.
 - Authentication/authorization: Public (`permitAll`).
+- Request body: `LoginRequest`.
 
-Request parameters
+| Field | Type | Required | Constraints |
+|---|---|---:|---|
+| `email` | `string` | Yes | `@NotBlank`, `@Email` |
+| `password` | `string` | Yes | `@NotBlank` |
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `email` | body | `string` | Yes | `@NotBlank`, `@Email` | Account email. |
-| `password` | body | `string` | Yes | `@NotBlank` | Plain password. |
-
-Request example
+Example:
 
 ```json
-{
-  "email": "jane@example.com",
-  "password": "Str0ngPass!"
-}
+{"email":"jane@example.com","password":"Str0ngPass!"}
 ```
 
-Responses
+Responses:
 
-| Status | Body schema | Example |
-|---|---|---|
-| `200 OK` | `ApiResponse<AuthResponse>` | `{"success":true,"message":"Login successful","data":{"accessToken":"<jwt>","user":{"id":"<uuid>","fullName":"Jane Doe","username":"jane_doe","email":"jane@example.com","avatarUrl":null,"role":"USER"}}}` |
-
-Errors
-
-- `400 Bad Request`: validation failure on request body (`@Valid`). Response body shape is `Not specified in source`.
-- `401 Unauthorized` intent for invalid credentials via `AuthException` (`INVALID_CREDENTIALS`) — `Inferred from AuthService` (mapping handler not specified in source).
+| Status | Body |
+|---|---|
+| `200 OK` | `ApiResponse<AuthResponse>` with message `Login successful`; also sets `refresh_token`. |
+| `400 Bad Request` | Validation error envelope containing field/object messages. |
+| `401 Unauthorized` | `ApiResponse<Void>` with `Invalid email or password`. |
+| `500 Internal Server Error` | Generic `ApiResponse<Void>`. |
 
 ### POST /api/auth/refresh
 
-- Purpose: Rotate refresh token and issue a new access token (and new refresh token cookie).
-- Authentication/authorization: Public (`permitAll`), but requires `refresh_token` cookie.
+- Purpose: Validate and rotate the refresh token, then issue a new access token and refresh-token cookie.
+- Authentication/authorization: Public (`permitAll`).
+- Request cookie:
 
-Request parameters
+  | Name | Type | Required | Constraints |
+  |---|---|---:|---|
+  | `refresh_token` | opaque `string` | Yes | `@CookieValue(required=true)` |
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `refresh_token` | cookie | `string` | Yes | `@CookieValue(required=true)` | Opaque refresh token. |
+- Request body: None.
 
-Request body
+Responses:
 
-- None.
+| Status | Body |
+|---|---|
+| `200 OK` | `ApiResponse<AuthResponse>` with message `Token refreshed`; sets a rotated `refresh_token`. |
+| `400 Bad Request` | `ApiResponse<Void>` with message `Malformed or incomplete request` when the required cookie is absent. |
+| `401 Unauthorized` | `ApiResponse<Void>` containing an invalid, expired, revoked, required, or reused-token message. |
+| `500 Internal Server Error` | Generic `ApiResponse<Void>`. |
 
-Responses
-
-| Status | Body schema | Example |
-|---|---|---|
-| `200 OK` | `ApiResponse<AuthResponse>` | `{"success":true,"message":"Token refreshed","data":{"accessToken":"<jwt>","user":{"id":"<uuid>","fullName":"Jane Doe","username":"jane_doe","email":"jane@example.com","avatarUrl":null,"role":"USER"}}}` |
-
-Errors
-
-- `400 Bad Request`: missing required `refresh_token` cookie parameter. Body shape `Not specified in source`.
-- `401 Unauthorized`: invalid/revoked/expired/reused token via `InvalidTokenException` (`@ResponseStatus(HttpStatus.UNAUTHORIZED)`). Message examples include `Invalid refresh token`, `Refresh token expired`, `Refresh token is revoked`, `Refresh token reuse detected. All sessions invalidated.`
+Token messages defined by `RefreshTokenService` include `Refresh token is required`, `Invalid refresh token`,
+`Refresh token expired`, `Refresh token is revoked`, and `Refresh token reuse detected. All sessions invalidated.`
 
 ### POST /api/auth/logout
 
-- Purpose: Revoke user refresh tokens (if token/user context present) and clear refresh token cookie.
+- Purpose: Revoke refresh tokens where possible and clear the refresh-token cookie.
 - Authentication/authorization: Public (`permitAll`).
+- Request parameters:
 
-Request parameters
+  | Name | Location | Type | Required | Meaning |
+  |---|---|---|---:|---|
+  | `refresh_token` | Cookie | `string` | No | If present, revoke the token owner's sessions. |
+  | `authentication` | Security context | `Authentication` | No | Used when no refresh cookie exists; its name is parsed as a UUID. |
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `refresh_token` | cookie | `string` | No | `@CookieValue(required=false)` | If present, logout by token owner. |
-| `authentication` | security context | `Authentication` | No | `authentication.getName()` expected to be UUID when present | Used when no refresh cookie is provided. |
+- Request body: None.
 
-Request body
+Responses:
 
-- None.
-
-Responses
-
-| Status | Body schema | Example |
-|---|---|---|
-| `200 OK` | `ApiResponse<Void>` with `data = Optional.empty()` | `Inferred from AuthController; concrete JSON representation of Optional.empty() is not specified in source` |
-
-Errors
-
-- If `authentication.getName()` is not a UUID, parsing behavior/status is `Not specified in source`.
-- If token/user lookup fails during revoke calls, mapped status is `Not specified in source` (domain exceptions are thrown in services; no explicit handler found).
+| Status | Body |
+|---|---|
+| `200 OK` | `ApiResponse<Void>` with message `Logout successful`, empty `data`, and a cleared `refresh_token` cookie. |
+| `400 Bad Request` | Malformed/incomplete request envelope where applicable. |
+| `401 Unauthorized` | Invalid refresh-token failure when revocation is attempted. |
+| `500 Internal Server Error` | Generic `ApiResponse<Void>` for unhandled failures, including UUID parsing failures. |
 
 ### GET /api/auth/me
 
-- Purpose: Return currently authenticated user profile.
-- Authentication/authorization: Requires authenticated request (`anyRequest().authenticated()`).
+- Purpose: Return the currently authenticated user's public profile.
+- Authentication/authorization: Authenticated request required (`anyRequest().authenticated()`).
+- Request body: None.
+- Authentication context: `authentication.getName()` is parsed as the user UUID.
 
-Request parameters
+Responses:
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `authentication` | security context | `Authentication` | Yes | `authentication.getName()` parsed as UUID | Current user principal ID source. |
-
-Request body
-
-- None.
-
-Responses
-
-| Status | Body schema | Example |
-|---|---|---|
-| `200 OK` | `ApiResponse<UserResponse>` | `{"success":true,"message":"Current user retrieved","data":{"id":"<uuid>","fullName":"Jane Doe","username":"jane_doe","email":"jane@example.com","avatarUrl":null,"role":"USER"}}` |
-| `401 Unauthorized` | `ApiResponse<Void>` | `{"success":false,"message":"Unauthorized","data":null}` (from `UnauthorizedResponseHandler` when unauthenticated access reaches entry point). |
-
-Errors
-
-- `404 Not Found` intent when user ID does not exist (`USER_NOT_FOUND`) — `Inferred from UserService` (explicit HTTP mapping for `AuthException` not specified in source).
-- UUID parsing failures from principal name: `Not specified in source`.
+| Status | Body |
+|---|---|
+| `200 OK` | `ApiResponse<UserResponse>` with message `Current user retrieved`. |
+| `401 Unauthorized` | `ApiResponse<Void>` with `Unauthorized`, written by `UnauthorizedResponseHandler`. |
+| `404 Not Found` | `ApiResponse<Void>` with `User not found`. |
+| `500 Internal Server Error` | Generic `ApiResponse<Void>` for unhandled failures. |
 
 ### GET /oauth2/authorization/{registrationId}
 
-- Purpose: Start OAuth2 login using configured provider.
-- Authentication/authorization: Public (`permitAll` via `/oauth2/**`).
-- Supported `registrationId` values from configuration: `google`, `github`.
-- Behavior: Redirects user agent to provider consent/login page (handled by Spring Security OAuth2 client).
+- Purpose: Start the Spring Security OAuth2 authorization flow.
+- Authentication/authorization: Public through `/oauth2/**`.
+- Path parameter:
 
-Request parameters
+  | Name | Type | Required | Values |
+  |---|---|---:|---|
+  | `registrationId` | `string` | Yes | Configured registrations: `google`, `github`. |
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `registrationId` | path | `string` | Yes | must match configured OAuth2 client registration | OAuth provider key (`google` or `github`). |
-
-Request body
-
-- None.
-
-Responses
-
-| Status | Body schema | Example |
-|---|---|---|
-| `302 Found` | Redirect | `Location: https://accounts.google.com/...` (provider URL; varies by provider/session). |
-
-Errors
-
-- Unsupported/unconfigured `registrationId`: behavior/status `Not specified in source` (framework-handled).
+- Request body: None.
+- Response: Framework-generated redirect to the selected provider. Exact status and provider URL are not specified in
+  application source.
 
 ### GET /login/oauth2/code/{registrationId}
 
-- Purpose: OAuth2 callback endpoint processed by Spring Security after provider authentication.
-- Authentication/authorization: Public (`permitAll` via `/login/**`).
-- Behavior:
-  - On success:
-    - Resolves provider profile attributes (`email`, `name` or `login`, `picture` or `avatar_url`).
-    - Calls `AuthService.loginWithOAuth2(provider, email, fullName, avatar)`.
-    - Sets `refresh_token` cookie (`HttpOnly`, `SameSite=Lax`, env-dependent `Secure`, `Path=/`, 7-day max-age).
-    - Redirects to `app.oauth2.success-redirect-uri` with query parameter `access_token=<jwt>`.
-  - On failure:
-    - Redirects to `app.oauth2.success-redirect-uri` with query parameter `error=oauth2_login_failed`.
+- Purpose: Spring Security OAuth2 callback.
+- Authentication/authorization: Public through `/login/**`.
+- Path parameter: `registrationId` (`string`, required, provider registration key).
+- Query parameters: Provider-managed OAuth2 callback values such as `code` and `state`; exact set is not specified in
+  application source.
+- Request body: None.
 
-Request parameters
+Success behavior:
 
-| Name | Location | Type | Required | Constraints | Description |
-|---|---|---|---|---|---|
-| `registrationId` | path | `string` | Yes | provider-specific OAuth2 client registration | Provider key (`google` or `github`). |
-| OAuth2 params (`code`, `state`, etc.) | query | `string` | Provider-dependent | managed by Spring Security OAuth2 flow | Authorization callback parameters. |
+1. Reads provider attributes `email`, `name`/`login`, and `picture`/`avatar_url`.
+2. Calls `AuthService.loginWithOAuth2`.
+3. Sets the HTTP-only `refresh_token` cookie.
+4. Redirects to `app.oauth2.success-redirect-uri` with `access_token=<jwt>`.
 
-Request body
+Failure behavior: Redirects to the same configured URI with `error=oauth2_login_failed`.
 
-- None.
-
-Responses
-
-| Status | Body schema | Example |
-|---|---|---|
-| `302 Found` | Redirect + `Set-Cookie` (success) | `Location: http://localhost:3000/oauth2/callback?access_token=<jwt>` + `Set-Cookie: refresh_token=...; HttpOnly; Path=/; SameSite=Lax` |
-| `302 Found` | Redirect (failure) | `Location: http://localhost:3000/oauth2/callback?error=oauth2_login_failed` |
+The exact framework redirect status is not specified in application source.
 
 ## WebSocket/message contracts
 
-No auth feature-local WebSocket/STOMP handlers were found in source (`@MessageMapping`, `@SendTo`, socket listeners not present).
+No auth-feature WebSocket/STOMP handlers or listeners were found in source.
 
 ## Shared schemas
 
-### RegisterRequest
-
-| Field | Type | Required | Nullable | Validation | Meaning |
-|---|---|---|---|---|---|
-| `fullName` | `string` | Yes | No (in request contract) | `@NotBlank`, `@Size(max=100)` | Display name. |
-| `username` | `string` | Yes | No (in request contract) | `@NotBlank`, `@Size(max=50)` | Unique username. |
-| `email` | `string` | Yes | No (in request contract) | `@NotBlank`, `@Email`, `@Size(max=255)` | Email identifier. |
-| `password` | `string` | Yes | No (in request contract) | `@NotBlank`, `@Size(min=8,max=100)` | Plain password. |
-
-### LoginRequest
-
-| Field | Type | Required | Nullable | Validation | Meaning |
-|---|---|---|---|---|---|
-| `email` | `string` | Yes | No (in request contract) | `@NotBlank`, `@Email` | Account email. |
-| `password` | `string` | Yes | No (in request contract) | `@NotBlank` | Plain password. |
-
 ### AuthResponse
 
-| Field | Type | Required | Nullable | Validation | Meaning |
-|---|---|---|---|---|---|
-| `accessToken` | `string` | Yes | Not specified in source | None | JWT access token generated by `JwtService`. |
-| `user` | `UserResponse` | Yes | Not specified in source | None | Public user payload. |
+| Field | Type | Required | Nullable | Meaning |
+|---|---|---:|---:|---|
+| `accessToken` | `string` | Yes | Not specified | Generated JWT access token. |
+| `user` | `UserResponse` | Yes | Not specified | Public user profile. |
 
 ### UserResponse
 
-| Field | Type | Required | Nullable | Validation | Meaning |
-|---|---|---|---|---|---|
-| `id` | `uuid` | Yes | Not specified in source | None | Server-generated user ID. |
-| `fullName` | `string` | Yes | Not specified in source | None | User display name. |
-| `username` | `string` | Yes | Not specified in source | None | Unique username. |
-| `email` | `string` | Yes | Not specified in source | None | User email. |
-| `avatarUrl` | `string` | Yes | May be nullable (inferred from entity/service writes) | None | Profile image URL. |
-| `role` | `UserRole` | Yes | Not specified in source | Enum values: `USER`, `ADMIN` | Authorization role. |
-
-### ApiResponse<T> envelope
-
 | Field | Type | Required | Nullable | Meaning |
-|---|---|---|---|---|
-| `success` | `boolean` | Yes | No | Indicates operation result. |
-| `message` | `string` | Yes | Not specified in source | Human-readable status message. |
-| `data` | `Optional<T>` | Yes | In practice can be present, empty, or `null` (see unauthorized handler) | Payload wrapper. |
+|---|---|---:|---:|---|
+| `id` | `UUID` | Yes | Not specified | User identifier. |
+| `fullName` | `string` | Yes | Not specified | Display name. |
+| `username` | `string` | Yes | Not specified | Username. |
+| `email` | `string` | Yes | Not specified | Email address. |
+| `avatarUrl` | `string` | Yes | Not specified | Profile image URL; provider data may be absent. |
+| `role` | `UserRole` | Yes | Not specified | `USER` or `ADMIN`. |
 
-### Unauthorized payload example
+### Error envelopes
 
-- Produced by security entry point:
+Validation errors are returned as `ApiResponse<Map<string,string>>` with `success=false`, message `Validation failed`,
+and `data` mapping field/property names to validation messages. `MethodArgumentNotValidException`, `BindException`,
+`ConstraintViolationException`, and `HandlerMethodValidationException` are handled.
 
-```json
-{
-  "success": false,
-  "message": "Unauthorized",
-  "data": null
-}
-```
+Custom application errors are returned as `ApiResponse<Void>` with `success=false`, the exception message, and empty
+`data`:
 
-### Refresh token cookie contract
+| Exception | Status |
+|---|---|
+| `AuthException` | Status carried by the exception, including `401`, `404`, and `409`. |
+| `InvalidTokenException` | `401 Unauthorized`. |
+| `ResponseStatusException` | Status carried by the exception. |
+| Malformed request or missing required parameter | `400 Bad Request`. |
+| Unhandled `Exception` | `500 Internal Server Error`. |
 
-| Field | Type | Required | Nullable | Constraints | Meaning |
-|---|---|---|---|---|---|
-| `refresh_token` | opaque string | Required for `POST /refresh`; optional for `POST /logout` | N/A | `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` env-dependent | Session refresh token. |
+The `AuthException.errorCode` values are application metadata (`EMAIL_ALREADY_EXISTS`, `USERNAME_ALREADY_EXISTS`,
+`INVALID_CREDENTIALS`, `OAUTH_EMAIL_MISSING`, and `USER_NOT_FOUND`) but are not serialized by the current handler.
 
-### OAuth2 redirect query contract
+### Refresh-token cookie
 
-| Field | Type | Required | Nullable | Constraints | Meaning |
-|---|---|---|---|---|---|
-| `access_token` | `string` | On OAuth2 success | N/A | JWT produced by backend | Access token returned to frontend redirect URI. |
-| `error` | `string` | On OAuth2 failure | N/A | fixed value `oauth2_login_failed` in current implementation | OAuth2 login failure signal. |
+| Property | Value |
+|---|---|
+| Name | `refresh_token` |
+| HTTP-only | `true` |
+| SameSite | `Lax` |
+| Path | `/` |
+| Secure | `true` except when `app.env=dev` |
+| Max-Age when issued | `604800` seconds (7 days) |
+| Max-Age when cleared | `0` |
 
 ## Source references
 
-- `src/main/java/com/meet/server/feature/auth/AuthController.java` (`register`, `login`, `refresh`, `logout`, `currentUser`)
-- `src/main/java/com/meet/server/feature/auth/AuthService.java` (registration/login/refresh/logout behavior and domain error intent)
-- `src/main/java/com/meet/server/feature/auth/RefreshTokenService.java` (token validation/rotation/revocation)
-- `src/main/java/com/meet/server/feature/auth/dto/RegisterRequest.java`
-- `src/main/java/com/meet/server/feature/auth/dto/LoginRequest.java`
-- `src/main/java/com/meet/server/feature/auth/dto/AuthResponse.java`
-- `src/main/java/com/meet/server/feature/auth/dto/UserResponse.java`
-- `src/main/java/com/meet/server/feature/auth/mapper/AuthMapper.java`
-- `src/main/java/com/meet/server/common/api/ApiResponse.java`
-- `src/main/java/com/meet/server/common/security/config/SecurityConfig.java`
-- `src/main/java/com/meet/server/common/security/oauth2/OAuth2UserService.java`
-- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationSuccessHandler.java`
-- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationFailureHandler.java`
-- `src/main/java/com/meet/server/common/security/handler/UnauthorizedResponseHandler.java`
-- `src/main/java/com/meet/server/common/util/CookieUtil.java`
-- `src/main/java/com/meet/server/common/config/AppConfig.java`
-- `src/main/java/com/meet/server/common/exception/InvalidTokenException.java`
-- `src/main/java/com/meet/server/common/exception/AuthException.java`
-- `src/main/java/com/meet/server/feature/user/UserService.java`
-- `src/main/java/com/meet/server/feature/user/UserRole.java`
-- `src/main/resources/application.yaml`
+- `src/main/java/com/meet/server/feature/auth/AuthController.java` — REST mappings and response messages.
+- `src/main/java/com/meet/server/feature/auth/AuthService.java` — local and OAuth2 auth behavior.
+- `src/main/java/com/meet/server/feature/auth/RefreshTokenService.java` — refresh-token lifecycle and errors.
+- `src/main/java/com/meet/server/feature/auth/dto/RegisterRequest.java` — registration validation.
+- `src/main/java/com/meet/server/feature/auth/dto/LoginRequest.java` — login validation.
+- `src/main/java/com/meet/server/feature/auth/dto/AuthResponse.java` and `UserResponse.java` — response schemas.
+- `src/main/java/com/meet/server/feature/user/UserService.java` and `UserRole.java` — user errors and role values.
+- `src/main/java/com/meet/server/common/api/ApiResponse.java` — response envelope.
+- `src/main/java/com/meet/server/common/exception/GlobalExceptionHandler.java` — validation and exception mappings.
+- `src/main/java/com/meet/server/common/exception/AuthException.java` and `InvalidTokenException.java` — custom errors.
+- `src/main/java/com/meet/server/common/security/config/SecurityConfig.java` — access rules and OAuth2 setup.
+- `src/main/java/com/meet/server/common/security/filter/JwtFilter.java` — JWT request authentication.
+- `src/main/java/com/meet/server/common/security/handler/UnauthorizedResponseHandler.java` — unauthenticated response.
+- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationSuccessHandler.java` — OAuth2 success flow.
+- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationFailureHandler.java` — OAuth2 failure flow.
+- `src/main/java/com/meet/server/common/util/CookieUtil.java` and `AppConfig.java` — cookie attributes and expiry.
+- `src/main/resources/application.yaml` — OAuth2 registrations and redirect configuration.
