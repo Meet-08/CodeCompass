@@ -80,6 +80,11 @@ public class RefreshTokenService {
         refreshTokenRepository.deleteAllByUser(user);
     }
 
+    @Transactional
+    public int deleteRevokedOrExpiredTokens() {
+        return refreshTokenRepository.deleteRevokedOrExpired(Instant.now());
+    }
+
     private String hashToken(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
