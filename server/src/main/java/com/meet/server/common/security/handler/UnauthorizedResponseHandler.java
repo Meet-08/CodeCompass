@@ -1,0 +1,36 @@
+package com.meet.server.common.security.handler;
+
+import com.meet.server.common.api.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NullMarked;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class UnauthorizedResponseHandler implements AuthenticationEntryPoint {
+
+    private final JsonMapper jsonMapper;
+
+    @Override
+    @NullMarked
+    public void commence(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException authException
+    ) throws IOException {
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write(jsonMapper.writeValueAsString(
+                new ApiResponse<Void>(false, "Unauthorized", null)
+        ));
+    }
+}
