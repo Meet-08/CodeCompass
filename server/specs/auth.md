@@ -6,7 +6,7 @@ Auth feature handles registration, login, token refresh, logout, and current-use
 
 ## Authentication and common conventions
 
-- Public routes (no authentication required): `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/refresh`, `POST /api/auth/logout` (`SecurityConfig`).
+- Public routes (no authentication required): `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/refresh`, `POST /api/auth/logout`, OAuth2 routes `/oauth2/**` and `/login/**` (`SecurityConfig`).
 - Other routes require authentication (`anyRequest().authenticated()`), including `GET /api/auth/me`.
 - Response envelope for successful controller responses is `ApiResponse<T>` with fields:
   - `success` (`boolean`)
@@ -171,6 +171,64 @@ Errors
 - `404 Not Found` intent when user ID does not exist (`USER_NOT_FOUND`) — `Inferred from UserService` (explicit HTTP mapping for `AuthException` not specified in source).
 - UUID parsing failures from principal name: `Not specified in source`.
 
+### GET /oauth2/authorization/{registrationId}
+
+- Purpose: Start OAuth2 login using configured provider.
+- Authentication/authorization: Public (`permitAll` via `/oauth2/**`).
+- Supported `registrationId` values from configuration: `google`, `github`.
+- Behavior: Redirects user agent to provider consent/login page (handled by Spring Security OAuth2 client).
+
+Request parameters
+
+| Name | Location | Type | Required | Constraints | Description |
+|---|---|---|---|---|---|
+| `registrationId` | path | `string` | Yes | must match configured OAuth2 client registration | OAuth provider key (`google` or `github`). |
+
+Request body
+
+- None.
+
+Responses
+
+| Status | Body schema | Example |
+|---|---|---|
+| `302 Found` | Redirect | `Location: https://accounts.google.com/...` (provider URL; varies by provider/session). |
+
+Errors
+
+- Unsupported/unconfigured `registrationId`: behavior/status `Not specified in source` (framework-handled).
+
+### GET /login/oauth2/code/{registrationId}
+
+- Purpose: OAuth2 callback endpoint processed by Spring Security after provider authentication.
+- Authentication/authorization: Public (`permitAll` via `/login/**`).
+- Behavior:
+  - On success:
+    - Resolves provider profile attributes (`email`, `name` or `login`, `picture` or `avatar_url`).
+    - Calls `AuthService.loginWithOAuth2(provider, email, fullName, avatar)`.
+    - Sets `refresh_token` cookie (`HttpOnly`, `SameSite=Lax`, env-dependent `Secure`, `Path=/`, 7-day max-age).
+    - Redirects to `app.oauth2.success-redirect-uri` with query parameter `access_token=<jwt>`.
+  - On failure:
+    - Redirects to `app.oauth2.success-redirect-uri` with query parameter `error=oauth2_login_failed`.
+
+Request parameters
+
+| Name | Location | Type | Required | Constraints | Description |
+|---|---|---|---|---|---|
+| `registrationId` | path | `string` | Yes | provider-specific OAuth2 client registration | Provider key (`google` or `github`). |
+| OAuth2 params (`code`, `state`, etc.) | query | `string` | Provider-dependent | managed by Spring Security OAuth2 flow | Authorization callback parameters. |
+
+Request body
+
+- None.
+
+Responses
+
+| Status | Body schema | Example |
+|---|---|---|
+| `302 Found` | Redirect + `Set-Cookie` (success) | `Location: http://localhost:3000/oauth2/callback?access_token=<jwt>` + `Set-Cookie: refresh_token=...; HttpOnly; Path=/; SameSite=Lax` |
+| `302 Found` | Redirect (failure) | `Location: http://localhost:3000/oauth2/callback?error=oauth2_login_failed` |
+
 ## WebSocket/message contracts
 
 No auth feature-local WebSocket/STOMP handlers were found in source (`@MessageMapping`, `@SendTo`, socket listeners not present).
@@ -237,6 +295,13 @@ No auth feature-local WebSocket/STOMP handlers were found in source (`@MessageMa
 |---|---|---|---|---|---|
 | `refresh_token` | opaque string | Required for `POST /refresh`; optional for `POST /logout` | N/A | `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` env-dependent | Session refresh token. |
 
+### OAuth2 redirect query contract
+
+| Field | Type | Required | Nullable | Constraints | Meaning |
+|---|---|---|---|---|---|
+| `access_token` | `string` | On OAuth2 success | N/A | JWT produced by backend | Access token returned to frontend redirect URI. |
+| `error` | `string` | On OAuth2 failure | N/A | fixed value `oauth2_login_failed` in current implementation | OAuth2 login failure signal. |
+
 ## Source references
 
 - `src/main/java/com/meet/server/feature/auth/AuthController.java` (`register`, `login`, `refresh`, `logout`, `currentUser`)
@@ -249,6 +314,9 @@ No auth feature-local WebSocket/STOMP handlers were found in source (`@MessageMa
 - `src/main/java/com/meet/server/feature/auth/mapper/AuthMapper.java`
 - `src/main/java/com/meet/server/common/api/ApiResponse.java`
 - `src/main/java/com/meet/server/common/security/config/SecurityConfig.java`
+- `src/main/java/com/meet/server/common/security/oauth2/OAuth2UserService.java`
+- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationSuccessHandler.java`
+- `src/main/java/com/meet/server/common/security/oauth2/OAuth2AuthenticationFailureHandler.java`
 - `src/main/java/com/meet/server/common/security/handler/UnauthorizedResponseHandler.java`
 - `src/main/java/com/meet/server/common/util/CookieUtil.java`
 - `src/main/java/com/meet/server/common/config/AppConfig.java`
@@ -256,3 +324,4 @@ No auth feature-local WebSocket/STOMP handlers were found in source (`@MessageMa
 - `src/main/java/com/meet/server/common/exception/AuthException.java`
 - `src/main/java/com/meet/server/feature/user/UserService.java`
 - `src/main/java/com/meet/server/feature/user/UserRole.java`
+- `src/main/resources/application.yaml`

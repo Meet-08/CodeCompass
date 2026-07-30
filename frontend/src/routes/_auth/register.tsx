@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { User, AtSign, Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Check } from 'lucide-react'
 import { toast } from 'sonner'
+import { env } from '#/env'
 import { useRegister } from '#/features/auth'
 
 export const Route = createFileRoute('/_auth/register')({
@@ -38,7 +39,7 @@ function RegisterComponent() {
   const strength = getPasswordStrength(password)
   const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SubmitEvent) => {
     e.preventDefault()
     if (!agreeTerms) {
       toast.error('Please agree to the Terms of Service & Privacy Policy.')
@@ -82,9 +83,11 @@ function RegisterComponent() {
     )
   }
 
-  const handleOAuthClick = (provider: string) => {
-    toast.info(`${provider} OAuth is not configured in the backend spec. Please register with email and password.`)
+  const handleOAuthClick = (provider: 'github' | 'google') => {
+    const baseUrl = env.VITE_API_BASE_URL.replace(/\/+$/, '')
+    window.location.href = `${baseUrl}/oauth2/authorization/${provider}`
   }
+
 
   return (
     <div className="w-full bg-[#0F141E]/90 backdrop-blur-2xl border border-slate-800/80 rounded-3xl p-7 sm:p-9 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative overflow-hidden group">
@@ -300,7 +303,7 @@ function RegisterComponent() {
         {/* GitHub */}
         <button
           type="button"
-          onClick={() => handleOAuthClick('GitHub')}
+          onClick={() => handleOAuthClick('github')}
           className="py-2.5 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -312,7 +315,7 @@ function RegisterComponent() {
         {/* Google */}
         <button
           type="button"
-          onClick={() => handleOAuthClick('Google')}
+          onClick={() => handleOAuthClick('google')}
           className="py-2.5 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">

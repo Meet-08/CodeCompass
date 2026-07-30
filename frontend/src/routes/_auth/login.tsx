@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { env } from '#/env'
 import { useLogin } from '#/features/auth'
 
 export const Route = createFileRoute('/_auth/login')({
@@ -45,8 +46,9 @@ function LoginComponent() {
     )
   }
 
-  const handleOAuthClick = (provider: string) => {
-    toast.info(`${provider} OAuth is not configured in the backend spec. Please sign in with email and password.`)
+  const handleOAuthClick = (provider: 'github' | 'google') => {
+    const baseUrl = env.VITE_API_BASE_URL.replace(/\/+$/, '')
+    window.location.href = `${baseUrl}/oauth2/authorization/${provider}`
   }
 
   const handleForgotPassword = (e: React.MouseEvent) => {
@@ -165,7 +167,7 @@ function LoginComponent() {
         {/* GitHub */}
         <button
           type="button"
-          onClick={() => handleOAuthClick('GitHub')}
+          onClick={() => handleOAuthClick('github')}
           className="py-2.5 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -177,7 +179,7 @@ function LoginComponent() {
         {/* Google */}
         <button
           type="button"
-          onClick={() => handleOAuthClick('Google')}
+          onClick={() => handleOAuthClick('google')}
           className="py-2.5 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">

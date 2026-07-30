@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCurrentUser, useLogout } from '#/features/auth'
-import { LogOut, User as UserIcon, Shield, Sparkles, ArrowRight, Compass } from 'lucide-react'
+import { LogOut, User as UserIcon, Shield, Sparkles, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -9,6 +10,7 @@ function Home() {
   const { data: userResponse, isLoading } = useCurrentUser()
   const logoutMutation = useLogout()
   const navigate = useNavigate()
+  const [avatarError, setAvatarError] = useState(false)
 
   const currentUser = userResponse?.data
 
@@ -24,7 +26,6 @@ function Home() {
     })
   }
 
-
   return (
     <div className="min-h-screen bg-[#080B11] text-slate-100 p-6 sm:p-12 font-sans relative overflow-hidden">
       {/* Dynamic Background Glows */}
@@ -37,12 +38,13 @@ function Home() {
         {/* Navigation Header */}
         <header className="flex items-center justify-between py-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
-              <Compass className="w-6 h-6 animate-pulse" />
-            </div>
+            <img src="/logo.png" alt="CodeCompass Logo" className="w-10 h-10 object-contain shrink-0" />
             <div>
-              <h1 className="font-extrabold text-xl text-white tracking-tight">CodeCompass</h1>
-              <p className="text-xs text-slate-400">AI Code Intelligence System</p>
+              <h1 className="font-extrabold text-xl text-white tracking-tight flex items-center gap-2">
+                CodeCompass
+                <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">AI Code Intelligence System</p>
             </div>
           </div>
 
@@ -89,9 +91,18 @@ function Home() {
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-orange-950/40">
-                  {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'U'}
-                </div>
+                {currentUser.avatarUrl && !avatarError ? (
+                  <img
+                    src={currentUser.avatarUrl}
+                    alt={currentUser.fullName}
+                    onError={() => setAvatarError(true)}
+                    className="w-14 h-14 rounded-2xl object-cover border border-orange-500/30 shadow-lg shadow-orange-950/40 shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-orange-950/40 shrink-0">
+                    {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-2xl font-extrabold text-white tracking-tight">
