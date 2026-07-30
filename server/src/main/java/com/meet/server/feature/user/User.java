@@ -39,8 +39,10 @@ public class User extends BaseAuditEntity {
     private String avatarUrl;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     private UserRole role = UserRole.USER;
 
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     private Provider provider = Provider.EMAIL;
 }
