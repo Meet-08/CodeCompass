@@ -8,7 +8,7 @@ CREATE TABLE codebases
     clone_url       VARCHAR(255),
     branch          VARCHAR(255),
     status          VARCHAR(255),
-    last_commit_sha UUID,
+    last_commit_sha VARCHAR(255),
     indexed_at      TIMESTAMP(6) WITHOUT TIME ZONE,
     CONSTRAINT pk_codebases PRIMARY KEY (id)
 );

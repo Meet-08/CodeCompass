@@ -12,6 +12,7 @@ CREATE TABLE repository_files
     size       BIGINT,
     CONSTRAINT pk_repository_files PRIMARY KEY (id),
     CONSTRAINT uk_repository_files_codebase_path UNIQUE (codebase_id, path),
+    CONSTRAINT uk_repository_files_id_codebase UNIQUE (id, codebase_id),
     CONSTRAINT fk_repository_files_on_codebase FOREIGN KEY (codebase_id) REFERENCES codebases (id)
 );
 
@@ -34,8 +35,8 @@ CREATE TABLE code_chunks
     commit_sha   VARCHAR(255),
     CONSTRAINT pk_code_chunks PRIMARY KEY (id),
     CONSTRAINT uk_code_chunks_file_chunk_index UNIQUE (file_id, chunk_index),
-    CONSTRAINT fk_code_chunks_on_file FOREIGN KEY (file_id) REFERENCES repository_files (id),
-    CONSTRAINT fk_code_chunks_on_codebase FOREIGN KEY (codebase_id) REFERENCES codebases (id)
+    CONSTRAINT fk_code_chunks_on_file_and_codebase FOREIGN KEY (file_id, codebase_id)
+        REFERENCES repository_files (id, codebase_id)
 );
 
 CREATE INDEX idx_code_chunks_codebase ON code_chunks (codebase_id);

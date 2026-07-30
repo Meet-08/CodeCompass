@@ -38,7 +38,7 @@ public class Codebase extends BaseAuditEntity {
     @Enumerated(EnumType.STRING)
     private CodebaseStatus status = CodebaseStatus.QUEUED;
 
-    private UUID lastCommitSha;
+    private String lastCommitSha;
 
     private Instant indexedAt;
 }

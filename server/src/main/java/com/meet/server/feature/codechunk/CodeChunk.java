@@ -35,11 +35,14 @@ public class CodeChunk extends BaseAuditEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "file_id", nullable = false)
+    @JoinColumns({
+            @JoinColumn(name = "file_id", referencedColumnName = "id", nullable = false),
+            @JoinColumn(name = "codebase_id", referencedColumnName = "codebase_id", nullable = false)
+    })
     private RepositoryFile file;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "codebase_id", nullable = false)
+    @JoinColumn(name = "codebase_id", nullable = false, insertable = false, updatable = false)
     private Codebase codebase;
 
     @Column(name = "chunk_index", nullable = false)
