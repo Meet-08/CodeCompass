@@ -1,29 +1,196 @@
 package com.meet.server.feature.codebase;
 
+import com.meet.server.common.exception.CodebaseException;
+import com.meet.server.feature.repositoryfile.RepositoryFileDescriptor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.ignore.IgnoreNode;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 
 @Service
 public class GitService {
 
-    public void clone(String url, String branch, String path) {
+    private static final Set<String> IGNORED_DIRECTORIES = Set.of(
+            ".git", ".github", ".gitlab", ".circleci", ".idea", ".vscode",
+            "node_modules", "bower_components", "vendor", "target", "build", "out",
+            "dist", "coverage", ".gradle", ".next", ".nuxt", ".angular", "__pycache__",
+            ".pytest_cache", ".mypy_cache", ".tox", ".venv", "venv", "env", "bin", "obj"
+    );
+
+    private static final Set<String> IGNORED_FILE_NAMES = Set.of(
+            ".gitignore", ".gitattributes", ".gitmodules", ".dockerignore",
+            ".editorconfig", ".env", ".env.local", ".env.development", ".env.production",
+            "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+            "composer.lock", "gemfile.lock", "poetry.lock", "pipfile.lock", "cargo.lock",
+            "gradle.lockfile", "go.sum"
+    );
+
+    private static final Set<String> IGNORED_EXTENSIONS = Set.of(
+            "7z", "avi", "bmp", "class", "dll", "dmg", "exe", "flac", "gif", "ico",
+            "jar", "jpeg", "jpg", "mov", "mp3", "mp4", "otf", "pdf", "so", "svg",
+            "tar", "ttf", "wav", "webp", "woff", "woff2", "zip", "map", "min.js", "min.css"
+    );
+
+    public void cloneRepository(String url, String branch, Path path) {
         try {
             var git = Git.cloneRepository()
                     .setURI(url)
-                    .setBranch(branch)
-                    .setDirectory(new File(path))
+                    .setBranch(branch == null || branch.isBlank() ? "main" : branch)
+                    .setDirectory(path.toFile())
                     .call();
             git.close();
         } catch (GitAPIException e) {
-            throw new RuntimeException(e);
+            throw new CodebaseException(
+                    "CODEBASE_CLONE_FAILED",
+                    "Unable to clone repository",
+                    HttpStatus.BAD_GATEWAY,
+                    e);
         }
     }
 
-    public void delete(String path) {
-        File file = new File(path);
-        file.delete();
+    public List<RepositoryFileDescriptor> listFiles(Path repositoryPath) {
+        var ignoreNode = loadIgnoreNode(repositoryPath);
+
+        try (var paths = Files.walk(repositoryPath)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> shouldIndex(repositoryPath, path, ignoreNode))
+                    .map(path -> descriptor(repositoryPath, path))
+                    .toList();
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_FILE_LIST_FAILED",
+                    "Unable to list repository files",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    private IgnoreNode loadIgnoreNode(Path repositoryPath) {
+        var gitignore = repositoryPath.resolve(".gitignore");
+        if (!Files.isRegularFile(gitignore)) {
+            return null;
+        }
+
+        var ignoreNode = new IgnoreNode();
+        try (InputStream input = Files.newInputStream(gitignore)) {
+            ignoreNode.parse(input);
+            return ignoreNode;
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_IGNORE_FILE_FAILED",
+                    "Unable to read repository ignore rules",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    private boolean shouldIndex(Path repositoryPath, Path file, IgnoreNode ignoreNode) {
+        var relativePath = repositoryPath.relativize(file).toString().replace('\\', '/');
+        var pathParts = relativePath.split("/");
+        var fileName = pathParts[pathParts.length - 1].toLowerCase(Locale.ROOT);
+
+        for (int index = 0; index < pathParts.length - 1; index++) {
+            if (IGNORED_DIRECTORIES.contains(pathParts[index].toLowerCase(Locale.ROOT))) {
+                return false;
+            }
+        }
+
+        if (IGNORED_FILE_NAMES.contains(fileName) || isIgnoredExtension(fileName)) {
+            return false;
+        }
+
+        return ignoreNode == null || !Boolean.TRUE.equals(ignoreNode.checkIgnored(relativePath, false));
+    }
+
+    private boolean isIgnoredExtension(String fileName) {
+        var dot = fileName.lastIndexOf('.');
+        if (dot < 0) {
+            return false;
+        }
+
+        var extension = fileName.substring(dot + 1);
+        return IGNORED_EXTENSIONS.contains(extension)
+                || IGNORED_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+    }
+
+    public void deleteRepository(Path repositoryPath) {
+        if (repositoryPath == null || !Files.exists(repositoryPath)) {
+            return;
+        }
+
+        try (var paths = Files.walk(repositoryPath)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(this::deletePath);
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_CLEANUP_FAILED",
+                    "Unable to delete cloned repository",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    private RepositoryFileDescriptor descriptor(Path repositoryPath, Path file) {
+        try {
+            var relativePath = repositoryPath.relativize(file).toString().replace('\\', '/');
+            return new RepositoryFileDescriptor(
+                    relativePath,
+                    languageOf(relativePath),
+                    Files.size(file),
+                    sha256(file));
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_FILE_INSPECTION_FAILED",
+                    "Unable to inspect repository file",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    private String languageOf(String path) {
+        var fileName = Path.of(path).getFileName().toString();
+        var dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT) : null;
+    }
+
+    private String sha256(Path file) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256");
+            try (var input = Files.newInputStream(file)) {
+                var buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new CodebaseException(
+                    "CODEBASE_CHECKSUM_FAILED",
+                    "Unable to checksum repository file",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    private void deletePath(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_CLEANUP_FAILED",
+                    "Unable to delete cloned repository path",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
     }
 }
