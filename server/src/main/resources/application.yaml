@@ -1,16 +1,20 @@
 spring:
   application:
     name: server
+  ai:
+    model:
+      embedding: ${EMBEDDING_MODEL}
+      chat: ${CHAT_MODEL}
+  datasource:
+    url: ${POSTGRES_URL}
+    password: ${POSTGRES_PASSWORD}
+    username: ${POSTGRES_USER}
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
   jpa:
     generate-ddl: off
-  datasource:
-    url: ${POSTGRES_URL}
-    password: ${POSTGRES_PASSWORD}
-    username: ${POSTGRES_USER}
 
   security:
     oauth2:
