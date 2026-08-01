@@ -2,8 +2,10 @@ package com.meet.server.feature.codebase;
 
 import com.meet.server.common.exception.CodebaseException;
 import com.meet.server.feature.repositoryfile.RepositoryFileDescriptor;
+import com.meet.server.feature.indexing.language.Language;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.ignore.IgnoreNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,7 @@ public class GitService {
 
     private static final Set<String> IGNORED_EXTENSIONS = Set.of(
             "7z", "avi", "bmp", "class", "dll", "dmg", "exe", "flac", "gif", "ico",
-            "jar", "jpeg", "jpg", "mov", "mp3", "mp4", "otf", "pdf", "so", "svg",
+            "jar", "jpeg", "jpg", "m4v", "mkv", "mov", "mp3", "mp4", "mpeg", "mpg", "png", "webm", "svg",
             "tar", "ttf", "wav", "webp", "woff", "woff2", "zip", "map", "min.js", "min.css"
     );
 
@@ -70,6 +72,22 @@ public class GitService {
             throw new CodebaseException(
                     "CODEBASE_FILE_LIST_FAILED",
                     "Unable to list repository files",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
+        }
+    }
+
+    public String currentCommitSha(Path repositoryPath) {
+        try (var git = Git.open(repositoryPath.toFile())) {
+            ObjectId head = git.getRepository().resolve("HEAD");
+            if (head == null) {
+                throw new IOException("Repository HEAD is not available");
+            }
+            return head.name();
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_COMMIT_SHA_FAILED",
+                    "Unable to resolve repository commit",
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     e);
         }
@@ -144,7 +162,7 @@ public class GitService {
             var relativePath = repositoryPath.relativize(file).toString().replace('\\', '/');
             return new RepositoryFileDescriptor(
                     relativePath,
-                    languageOf(relativePath),
+                    Language.extensionOf(relativePath),
                     Files.size(file),
                     sha256(file));
         } catch (IOException e) {
@@ -154,12 +172,6 @@ public class GitService {
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     e);
         }
-    }
-
-    private String languageOf(String path) {
-        var fileName = Path.of(path).getFileName().toString();
-        var dot = fileName.lastIndexOf('.');
-        return dot > 0 ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT) : null;
     }
 
     private String sha256(Path file) {

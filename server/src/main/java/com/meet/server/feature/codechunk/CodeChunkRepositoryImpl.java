@@ -1,7 +1,7 @@
 package com.meet.server.feature.codechunk;
 
 import com.meet.server.feature.codebase.Codebase;
-import com.meet.server.feature.codechunk.dto.SimilaritySearchRequest;
+import com.meet.server.feature.embedding.SimilaritySearchRequest;
 import com.meet.server.feature.repositoryfile.RepositoryFile;
 import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
@@ -108,7 +108,7 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         if (value instanceof PGvector vector) {
             return vector.toArray();
         }
-        
+
         String literal = value instanceof PGobject pgObject ? pgObject.getValue() : value.toString();
         return new PGvector(literal).toArray();
     }

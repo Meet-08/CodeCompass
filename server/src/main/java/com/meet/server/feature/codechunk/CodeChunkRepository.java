@@ -1,6 +1,6 @@
 package com.meet.server.feature.codechunk;
 
-import com.meet.server.feature.codechunk.dto.SimilaritySearchRequest;
+import com.meet.server.feature.embedding.SimilaritySearchRequest;
 
 import java.util.Collection;
 import java.util.List;

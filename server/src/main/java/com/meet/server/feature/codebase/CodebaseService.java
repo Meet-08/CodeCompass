@@ -82,8 +82,10 @@ public class CodebaseService {
             Path repositoryPath = Files.createTempDirectory("codebase-" + codebaseId);
             try {
                 gitService.cloneRepository(codebase.getCloneUrl(), codebase.getBranch(), repositoryPath);
+                var commitSha = gitService.currentCommitSha(repositoryPath);
+                codebaseRepository.updateLastCommitSha(codebaseId, commitSha);
                 var files = gitService.listFiles(repositoryPath);
-                var fileCount = fileProcessor.process(codebase, repositoryPath, files);
+                var fileCount = fileProcessor.process(codebase, repositoryPath, files, commitSha);
                 statusService.update(codebaseId, CodebaseStatus.INDEXED);
                 return new CodebaseImportResponse(codebaseId, CodebaseStatus.INDEXED, fileCount);
             } finally {

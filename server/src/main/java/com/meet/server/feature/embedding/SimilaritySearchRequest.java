@@ -1,4 +1,4 @@
-package com.meet.server.feature.codechunk.dto;
+package com.meet.server.feature.embedding;
 
 import java.util.UUID;
 
