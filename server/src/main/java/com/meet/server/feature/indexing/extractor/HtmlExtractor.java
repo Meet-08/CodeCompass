@@ -12,6 +12,8 @@ import java.util.List;
 @Component
 public class HtmlExtractor implements ChunkExtractor {
 
+    private static final int MAX_RECURSION_DEPTH = 64;
+
     @Override
     public boolean supports(Language language) {
         return language == Language.HTML;
@@ -24,12 +26,13 @@ public class HtmlExtractor implements ChunkExtractor {
         }
         var chunks = new ArrayList<CodeChunk>();
         for (int i = 0; i < parsed.rootNode().getNamedChildCount(); i++) {
-            emit(parsed, parsed.rootNode().getNamedChild(i), "", chunks);
+            emit(parsed, parsed.rootNode().getNamedChild(i), "", 0, chunks);
         }
         return chunks;
     }
 
-    private void emit(ParsedFile parsed, TSNode node, String inheritedContext, List<CodeChunk> chunks) {
+    private void emit(ParsedFile parsed, TSNode node, String inheritedContext, int depth,
+                      List<CodeChunk> chunks) {
         String content = TreeSitterChunkSupport.source(parsed, node);
         if (content.isBlank() || "comment".equals(node.getType())) {
             return;
@@ -37,6 +40,10 @@ public class HtmlExtractor implements ChunkExtractor {
         String complete = inheritedContext + content;
         if (complete.length() <= TreeSitterChunkSupport.MAX_CHUNK_CHARACTERS) {
             TreeSitterChunkSupport.addChunk(parsed, node, chunks, complete);
+            return;
+        }
+        if (depth >= MAX_RECURSION_DEPTH) {
+            emitLineChunks(parsed, node, inheritedContext, chunks);
             return;
         }
 
@@ -47,7 +54,7 @@ public class HtmlExtractor implements ChunkExtractor {
             if (isStructuralWrapper(child) || "comment".equals(child.getType())) {
                 continue;
             }
-            emit(parsed, child, context, chunks);
+            emit(parsed, child, context, depth + 1, chunks);
         }
         if (chunks.size() == before) {
             emitLineChunks(parsed, node, inheritedContext, chunks);

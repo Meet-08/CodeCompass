@@ -20,14 +20,19 @@ public class MarkdownExtractor implements ChunkExtractor {
         var chunks = new ArrayList<CodeChunk>();
         var current = new StringBuilder();
         int startLine = 1;
+        boolean inFence = false;
         var lines = parsed.content().split("\\R", -1);
         for (int i = 0; i < lines.length; i++) {
-            if (lines[i].startsWith("#") && !current.isEmpty()) {
+            String line = lines[i];
+            if (!inFence && line.startsWith("#") && !current.isEmpty()) {
                 add(parsed, chunks, current, startLine, i);
                 current.setLength(0);
                 startLine = i + 1;
             }
-            current.append(lines[i]).append('\n');
+            current.append(line).append('\n');
+            if (line.stripLeading().startsWith("```")) {
+                inFence = !inFence;
+            }
         }
         if (!current.toString().isBlank()) add(parsed, chunks, current, startLine, lines.length);
         return chunks;

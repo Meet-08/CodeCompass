@@ -3,8 +3,9 @@ package com.meet.server.feature.indexing.language;
 import lombok.Getter;
 
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public enum Language {
@@ -60,6 +61,7 @@ public enum Language {
     private static final Set<String> FIELD_DECLARATIONS = Set.of(
             "field_declaration", "field_definition", "class_field", "property_declaration"
     );
+    private static final Map<String, Language> BY_ALIAS = buildAliasMap();
 
     @Getter
     private final boolean programming;
@@ -80,18 +82,25 @@ public enum Language {
         if (value == null || value.isBlank()) return UNKNOWN;
         String normalized = value.toLowerCase(Locale.ROOT).strip();
         if (normalized.startsWith(".")) normalized = normalized.substring(1);
-        final String alias = normalized;
-        return Arrays.stream(values())
-                .filter(language -> language.aliases.contains(alias))
-                .findFirst()
-                .orElse(UNKNOWN);
+        return BY_ALIAS.getOrDefault(normalized, UNKNOWN);
     }
 
     public static String extensionOf(String path) {
         if (path == null || path.isBlank()) return null;
         String fileName = Path.of(path).getFileName().toString();
         int dot = fileName.lastIndexOf('.');
-        return dot > 0 ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT) : null;
+        return dot > 0 ? fileName.substring(dot + 1).toLowerCase(Locale.ROOT)
+                : fileName.toLowerCase(Locale.ROOT);
+    }
+
+    private static Map<String, Language> buildAliasMap() {
+        var aliases = new HashMap<String, Language>();
+        for (Language language : values()) {
+            for (String alias : language.aliases) {
+                aliases.put(alias, language);
+            }
+        }
+        return Map.copyOf(aliases);
     }
 
     public String grammarClass() {

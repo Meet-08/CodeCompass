@@ -21,6 +21,8 @@ import java.util.*;
 @Service
 public class GitService {
 
+    private static final int CLONE_TIMEOUT_SECONDS = 60;
+
     private static final Set<String> IGNORED_DIRECTORIES = Set.of(
             ".git", ".github", ".gitlab", ".circleci", ".idea", ".vscode",
             "node_modules", "bower_components", "vendor", "target", "build", "out",
@@ -43,13 +45,13 @@ public class GitService {
     );
 
     public void cloneRepository(String url, String branch, Path path) {
-        try {
-            var git = Git.cloneRepository()
+        try (var git = Git.cloneRepository()
                     .setURI(url)
                     .setBranch(branch == null || branch.isBlank() ? "main" : branch)
                     .setDirectory(path.toFile())
-                    .call();
-            git.close();
+                    .setTimeout(CLONE_TIMEOUT_SECONDS)
+                    .call()) {
+            // The cloned repository is closed when this operation completes.
         } catch (GitAPIException e) {
             throw new CodebaseException(
                     "CODEBASE_CLONE_FAILED",
@@ -60,12 +62,12 @@ public class GitService {
     }
 
     public List<RepositoryFileDescriptor> listFiles(Path repositoryPath) {
-        var ignoreNode = loadIgnoreNode(repositoryPath);
+        var ignoreNodes = loadIgnoreNodes(repositoryPath);
 
         try (var paths = Files.walk(repositoryPath)) {
             return paths
                     .filter(Files::isRegularFile)
-                    .filter(path -> shouldIndex(repositoryPath, path, ignoreNode))
+                    .filter(path -> shouldIndex(repositoryPath, path, ignoreNodes))
                     .map(path -> descriptor(repositoryPath, path))
                     .toList();
         } catch (IOException e) {
@@ -93,14 +95,24 @@ public class GitService {
         }
     }
 
-    private IgnoreNode loadIgnoreNode(Path repositoryPath) {
-        var gitignore = repositoryPath.resolve(".gitignore");
-        if (!Files.isRegularFile(gitignore)) {
-            return null;
+    private Map<Path, IgnoreNode> loadIgnoreNodes(Path repositoryPath) {
+        try (var paths = Files.walk(repositoryPath)) {
+            return paths.filter(Files::isDirectory)
+                    .map(Path::normalize)
+                    .filter(path -> Files.isRegularFile(path.resolve(".gitignore")))
+                    .collect(LinkedHashMap::new, (nodes, path) -> nodes.put(path, loadIgnoreNode(path)), Map::putAll);
+        } catch (IOException e) {
+            throw new CodebaseException(
+                    "CODEBASE_IGNORE_FILE_FAILED",
+                    "Unable to read repository ignore rules",
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    e);
         }
+    }
 
+    private IgnoreNode loadIgnoreNode(Path directory) {
         var ignoreNode = new IgnoreNode();
-        try (InputStream input = Files.newInputStream(gitignore)) {
+        try (InputStream input = Files.newInputStream(directory.resolve(".gitignore"))) {
             ignoreNode.parse(input);
             return ignoreNode;
         } catch (IOException e) {
@@ -112,7 +124,7 @@ public class GitService {
         }
     }
 
-    private boolean shouldIndex(Path repositoryPath, Path file, IgnoreNode ignoreNode) {
+    private boolean shouldIndex(Path repositoryPath, Path file, Map<Path, IgnoreNode> ignoreNodes) {
         var relativePath = repositoryPath.relativize(file).toString().replace('\\', '/');
         var pathParts = relativePath.split("/");
         var fileName = pathParts[pathParts.length - 1].toLowerCase(Locale.ROOT);
@@ -127,7 +139,28 @@ public class GitService {
             return false;
         }
 
-        return ignoreNode == null || !Boolean.TRUE.equals(ignoreNode.checkIgnored(relativePath, false));
+        for (Path directory = repositoryPath; directory != null && directory.startsWith(repositoryPath);
+             directory = directory.equals(repositoryPath) ? null : directory.getParent()) {
+            var ignoreNode = ignoreNodes.get(directory.normalize());
+            if (ignoreNode != null) {
+                var ignoredPath = directory.relativize(file).toString().replace('\\', '/');
+                var pathPartsFromDirectory = ignoredPath.split("/");
+                StringBuilder path = new StringBuilder();
+                for (int index = 0; index < pathPartsFromDirectory.length - 1; index++) {
+                    if (path.length() > 0) {
+                        path.append('/');
+                    }
+                    path.append(pathPartsFromDirectory[index]);
+                    if (Boolean.TRUE.equals(ignoreNode.checkIgnored(path.toString(), true))) {
+                        return false;
+                    }
+                }
+                if (Boolean.TRUE.equals(ignoreNode.checkIgnored(ignoredPath, false))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private boolean isIgnoredExtension(String fileName) {

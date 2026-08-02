@@ -12,12 +12,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmbeddingService {
 
+    private static final int EMBEDDING_BATCH_SIZE = 32;
+
     private final CodeChunkRepository codeChunkRepository;
     private final EmbeddingModel embeddingModel;
 
     public void embedChunks(List<CodeChunk> chunks) {
-        for (var chunk : chunks) {
-            chunk.setEmbedding(embeddingModel.embed(chunk.getContent()));
+        for (int start = 0; start < chunks.size(); start += EMBEDDING_BATCH_SIZE) {
+            int end = Math.min(start + EMBEDDING_BATCH_SIZE, chunks.size());
+            var batch = chunks.subList(start, end);
+            var embeddings = embeddingModel.embed(batch.stream()
+                    .map(CodeChunk::getContent)
+                    .toList());
+            for (int index = 0; index < batch.size(); index++) {
+                batch.get(index).setEmbedding(embeddings.get(index));
+            }
         }
 
         codeChunkRepository.saveAll(chunks);

@@ -12,8 +12,10 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.*;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -127,6 +129,32 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         Timestamp now = Timestamp.from(Instant.now());
         jdbcTemplate.batchUpdate(INSERT_SQL, chunks, BATCH_SIZE,
                 (statement, chunk) -> bindChunk(statement, chunk, now));
+        var chunksByFile = chunks.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        chunk -> requiredId(chunk.getFile(), "file")));
+        for (var entry : chunksByFile.entrySet()) {
+            var chunkIndexes = entry.getValue().stream()
+                    .map(CodeChunk::getChunkIndex)
+                    .toList();
+            Map<Integer, UUID> persistedIds = new HashMap<>();
+            jdbcClient.sql("""
+                            SELECT id, chunk_index FROM code_chunks
+                            WHERE file_id = :fileId AND chunk_index IN (:chunkIndexes)
+                            """)
+                    .param("fileId", entry.getKey())
+                    .param("chunkIndexes", chunkIndexes)
+                    .query((rs, rowNum) -> Map.entry(
+                            rs.getInt("chunk_index"), rs.getObject("id", UUID.class)))
+                    .list()
+                    .forEach(id -> persistedIds.put(id.getKey(), id.getValue()));
+            for (CodeChunk chunk : entry.getValue()) {
+                UUID persistedId = persistedIds.get(chunk.getChunkIndex());
+                if (persistedId == null) {
+                    throw new IllegalStateException("Persisted code chunk was not found");
+                }
+                chunk.setId(persistedId);
+            }
+        }
     }
 
     @Override

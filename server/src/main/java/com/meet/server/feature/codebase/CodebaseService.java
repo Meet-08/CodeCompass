@@ -13,8 +13,13 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Inet4Address;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -47,6 +52,7 @@ public class CodebaseService {
 
     @Transactional
     public CodebaseImportResponse startClone(UUID userId, CodebaseImportRequest request) {
+        validateCloneUrl(request.cloneUrl());
         var codebase = codebaseRepository.save(Codebase.builder()
                 .user(userService.getById(userId))
                 .name(request.name())
@@ -64,6 +70,64 @@ public class CodebaseService {
         });
 
         return new CodebaseImportResponse(codebaseId, CodebaseStatus.QUEUED, 0);
+    }
+
+    private void validateCloneUrl(String cloneUrl) {
+        if (cloneUrl == null || cloneUrl.isBlank()) {
+            throw invalidCloneUrl(null);
+        }
+        final URI uri;
+        try {
+            uri = new URI(cloneUrl);
+        } catch (URISyntaxException exception) {
+            throw invalidCloneUrl(exception);
+        }
+
+        if (!"https".equalsIgnoreCase(uri.getScheme())
+                || uri.getHost() == null
+                || uri.getHost().isBlank()
+                || uri.getUserInfo() != null) {
+            throw invalidCloneUrl(null);
+        }
+
+        try {
+            for (InetAddress address : InetAddress.getAllByName(uri.getHost())) {
+                if (isInternalAddress(address)) {
+                    throw invalidCloneUrl(null);
+                }
+            }
+        } catch (IOException exception) {
+            throw invalidCloneUrl(exception);
+        }
+    }
+
+    private boolean isInternalAddress(InetAddress address) {
+        String hostAddress = address.getHostAddress().toLowerCase(Locale.ROOT);
+        if (address.isAnyLocalAddress()
+                || address.isLoopbackAddress()
+                || address.isLinkLocalAddress()
+                || address.isSiteLocalAddress()
+                || address.isMulticastAddress()
+                || hostAddress.startsWith("fc")
+                || hostAddress.startsWith("fd")) {
+            return true;
+        }
+        if (address instanceof Inet4Address) {
+            byte[] bytes = address.getAddress();
+            int first = bytes[0] & 0xff;
+            int second = bytes[1] & 0xff;
+            return first == 100 && second >= 64 && second <= 127
+                    || first == 192 && second == 0
+                    || first == 198 && (second == 18 || second == 19)
+                    || first >= 240;
+        }
+        return false;
+    }
+
+    private CodebaseException invalidCloneUrl(Throwable cause) {
+        return cause == null
+                ? new CodebaseException("INVALID_CLONE_URL", "Clone URL must be a public HTTPS URL", HttpStatus.BAD_REQUEST)
+                : new CodebaseException("INVALID_CLONE_URL", "Clone URL must be a public HTTPS URL", HttpStatus.BAD_REQUEST, cause);
     }
 
     public CompletableFuture<CodebaseImportResponse> processAsync(UUID codebaseId) {
