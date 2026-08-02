@@ -1,10 +1,25 @@
 package com.meet.server.feature.codechunk;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.meet.server.feature.embedding.SimilaritySearchRequest;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-@Repository
-public interface CodeChunkRepository extends JpaRepository<CodeChunk, UUID> {
+public interface CodeChunkRepository {
+
+    void saveAll(Collection<CodeChunk> chunks);
+
+    void updateEmbedding(UUID chunkId, float[] embedding);
+
+    void deleteByFileId(UUID fileId);
+
+    void deleteByCodebaseId(UUID codebaseId);
+
+    Optional<CodeChunk> findById(UUID chunkId);
+
+    List<SimilaritySearchResult> similaritySearch(SimilaritySearchRequest request);
+
+    long countByCodebaseId(UUID codebaseId);
 }

@@ -1,17 +1,23 @@
 spring:
   application:
     name: server
+  ai:
+    model:
+      embedding: ollama
+      chat: ${CHAT_MODEL}
+    ollama:
+      embedding:
+        model: ${EMBEDDING_MODEL}
+  datasource:
+    url: ${POSTGRES_URL}
+    password: ${POSTGRES_PASSWORD}
+    username: ${POSTGRES_USER}
   data:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
   jpa:
     generate-ddl: off
-  datasource:
-    url: ${POSTGRES_URL}
-    password: ${POSTGRES_PASSWORD}
-    username: ${POSTGRES_USER}
-
   security:
     oauth2:
       client:
@@ -28,6 +34,9 @@ spring:
             scope:
               - read:user
               - user:email
+logging:
+  level:
+    com.meet.server.feature.repositoryfile.RepositoryFileProcessor: DEBUG
 
 app:
   env: dev

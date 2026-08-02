@@ -61,6 +61,12 @@ public class GlobalExceptionHandler {
         return response(exception.getStatus(), exception.getMessage());
     }
 
+    @ExceptionHandler(CodebaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCodebaseException(CodebaseException exception) {
+        log.warn("Codebase operation failed [{}]: {}", exception.getErrorCode(), exception.getMessage());
+        return response(exception.getStatus(), exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidToken(InvalidTokenException exception) {
         return response(HttpStatus.UNAUTHORIZED, exception.getMessage());
