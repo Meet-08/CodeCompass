@@ -226,18 +226,19 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         if (hasText(request.commitSha())) {
             sql.append(" AND c.commit_sha = :commitSha");
         }
-        sql.append("""
-                ) ranked
-                WHERE (:maxDistance IS NULL OR ranked.distance <= :maxDistance)
-                ORDER BY ranked.distance
-                LIMIT :topK
-                """);
+        sql.append(") ranked\n");
+        if (request.maxDistance() != null) {
+            sql.append("WHERE ranked.distance <= :maxDistance\n");
+        }
+        sql.append("ORDER BY ranked.distance\nLIMIT :topK\n");
 
         var statement = jdbcClient.sql(sql.toString())
                 .param("codebaseId", request.codebaseId())
                 .param("embedding", new PGvector(request.embedding()))
-                .param("maxDistance", request.maxDistance())
                 .param("topK", Math.max(1, request.topK()));
+        if (request.maxDistance() != null) {
+            statement = statement.param("maxDistance", request.maxDistance());
+        }
         if (hasText(request.language())) {
             statement = statement.param("language", request.language());
         }
