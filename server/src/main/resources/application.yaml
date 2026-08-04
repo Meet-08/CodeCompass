@@ -4,8 +4,10 @@ spring:
   ai:
     model:
       embedding: ollama
-      chat: ${CHAT_MODEL}
+      chat: ollama
     ollama:
+      chat:
+        model: ${CHAT_MODEL:llama3.2}
       embedding:
         model: ${EMBEDDING_MODEL}
   datasource:
@@ -36,7 +38,7 @@ spring:
               - user:email
 logging:
   level:
-    com.meet.server.feature.repositoryfile.RepositoryFileProcessor: DEBUG
+    com.meet.server.feature.retriver.CodeRetriever: DEBUG
 
 app:
   env: dev

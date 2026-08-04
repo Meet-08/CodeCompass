@@ -1,28 +1,39 @@
 package com.meet.server.feature.codebase;
 
 import com.meet.server.common.exception.CodebaseException;
+import com.meet.server.feature.advisor.CodeAdvisor;
+import com.meet.server.feature.codebase.dto.CodeChatRequest;
+import com.meet.server.feature.codebase.dto.CodeCitation;
 import com.meet.server.feature.codebase.dto.CodebaseImportRequest;
 import com.meet.server.feature.codebase.dto.CodebaseImportResponse;
 import com.meet.server.feature.repositoryfile.RepositoryFileProcessor;
 import com.meet.server.feature.user.UserService;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import reactor.core.publisher.Flux;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.Inet4Address;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class CodebaseService {
@@ -33,6 +44,8 @@ public class CodebaseService {
     private final RepositoryFileProcessor fileProcessor;
     private final CodebaseStatusService statusService;
     private final Executor codebaseTaskExecutor;
+    private final ChatClient chatClient;
+    private final JsonMapper jsonMapper;
 
     public CodebaseService(
             CodebaseRepository codebaseRepository,
@@ -40,7 +53,10 @@ public class CodebaseService {
             GitService gitService,
             RepositoryFileProcessor fileProcessor,
             CodebaseStatusService statusService,
-            @Qualifier("codebaseTaskExecutor") Executor codebaseTaskExecutor
+            @Qualifier("codebaseTaskExecutor") Executor codebaseTaskExecutor,
+            ChatClient.Builder chatClientBuilder,
+            CodeAdvisor codeAdvisor,
+            JsonMapper jsonMapper
     ) {
         this.codebaseRepository = codebaseRepository;
         this.userService = userService;
@@ -48,6 +64,10 @@ public class CodebaseService {
         this.fileProcessor = fileProcessor;
         this.statusService = statusService;
         this.codebaseTaskExecutor = codebaseTaskExecutor;
+        this.jsonMapper = jsonMapper;
+        ChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
+        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
+        this.chatClient = chatClientBuilder.defaultAdvisors(memoryAdvisor, codeAdvisor).build();
     }
 
     @Transactional
@@ -89,39 +109,6 @@ public class CodebaseService {
                 || uri.getUserInfo() != null) {
             throw invalidCloneUrl(null);
         }
-
-        try {
-            for (InetAddress address : InetAddress.getAllByName(uri.getHost())) {
-                if (isInternalAddress(address)) {
-                    throw invalidCloneUrl(null);
-                }
-            }
-        } catch (IOException exception) {
-            throw invalidCloneUrl(exception);
-        }
-    }
-
-    private boolean isInternalAddress(InetAddress address) {
-        String hostAddress = address.getHostAddress().toLowerCase(Locale.ROOT);
-        if (address.isAnyLocalAddress()
-                || address.isLoopbackAddress()
-                || address.isLinkLocalAddress()
-                || address.isSiteLocalAddress()
-                || address.isMulticastAddress()
-                || hostAddress.startsWith("fc")
-                || hostAddress.startsWith("fd")) {
-            return true;
-        }
-        if (address instanceof Inet4Address) {
-            byte[] bytes = address.getAddress();
-            int first = bytes[0] & 0xff;
-            int second = bytes[1] & 0xff;
-            return first == 100 && second >= 64 && second <= 127
-                    || first == 192 && second == 0
-                    || first == 198 && (second == 18 || second == 19)
-                    || first >= 240;
-        }
-        return false;
     }
 
     private CodebaseException invalidCloneUrl(Throwable cause) {
@@ -166,5 +153,44 @@ public class CodebaseService {
             statusService.update(codebaseId, CodebaseStatus.FAILED);
             throw exception;
         }
+    }
+
+    public Flux<ServerSentEvent<Object>> streamChat(UUID userId, UUID codebaseId, CodeChatRequest request) {
+        var codebase = codebaseRepository.findById(codebaseId).orElseThrow(() ->
+                new CodebaseException("CODEBASE_NOT_FOUND", "Codebase not found", HttpStatus.NOT_FOUND));
+        if (codebase.getUser() == null || !userId.equals(codebase.getUser().getId())) {
+            throw new CodebaseException("CODEBASE_FORBIDDEN", "You do not own this codebase", HttpStatus.FORBIDDEN);
+        }
+        String chatId = request.chatId() == null || request.chatId().isBlank() ? "default" : request.chatId().trim();
+        String conversationId = userId + ":" + codebaseId + ":" + chatId;
+        var citations = new AtomicReference<List<CodeCitation>>(List.of());
+
+        return chatClient.prompt().user(request.message().trim())
+                .advisors(advisors -> advisors
+                        .param(ChatMemory.CONVERSATION_ID, conversationId)
+                        .param(CodeAdvisor.CODEBASE_ID_CONTEXT, codebaseId))
+                .stream().chatClientResponse()
+                .map(response -> {
+                    var responseCitations = response.context().get(CodeAdvisor.CITATIONS_CONTEXT);
+                    if (responseCitations instanceof List<?> values) {
+                        citations.set(values.stream()
+                                .filter(CodeCitation.class::isInstance)
+                                .map(CodeCitation.class::cast)
+                                .toList());
+                    }
+                    var text = Objects.requireNonNull(Objects.requireNonNull(response.chatResponse()).getResult())
+                            .getOutput().getText();
+                    return sse("message", text);
+                })
+                .concatWith(Flux.defer(() -> Flux.just(
+                        sse("citations", citations.get()),
+                        sse("done", chatId))))
+                .onErrorResume(error -> Flux.just(sse("error", Map.of("message", "Unable to complete chat"))));
+    }
+
+    private ServerSentEvent<Object> sse(String event, Object data) {
+        return ServerSentEvent.builder((Object) jsonMapper.writeValueAsString(data))
+                .event(event)
+                .build();
     }
 }
