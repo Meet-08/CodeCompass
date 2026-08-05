@@ -10,7 +10,7 @@ COPY src ./src
 RUN ./gradlew bootJar --no-daemon -x test
 
 # Stage 2: Runtime
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 
@@ -21,6 +21,6 @@ RUN addgroup -S appuser && \
 
 USER appuser
 
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Dtree-sitter-lib=/tmp"
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:+UseG1GC -XX:TieredStopAtLevel=1 -Dtree-sitter-lib=/tmp"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
