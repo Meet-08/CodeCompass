@@ -17,10 +17,12 @@ WORKDIR /app
 COPY --from=builder /app/build/libs/*.jar app.jar
 
 RUN addgroup -S appuser && \
-    adduser -S -G appuser appuser
+    adduser -S -G appuser appuser && \
+    mkdir -p /tmp/tree-sitter && \
+    chown -R appuser:appuser /tmp/tree-sitter
 
 USER appuser
 
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Dtree-sitter-lib=/tmp/tree-sitter -Djava.io.tmpdir=/tmp/tree-sitter"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
