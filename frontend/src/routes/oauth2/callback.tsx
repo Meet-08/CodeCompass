@@ -39,8 +39,13 @@ function OAuthCallbackComponent() {
     <div className="min-h-screen bg-[#080B11] text-slate-100 flex flex-col items-center justify-center p-6 font-sans">
       <div className="p-8 rounded-3xl bg-[#0F141E]/90 backdrop-blur-2xl border border-slate-800/80 shadow-2xl flex flex-col items-center space-y-4 max-w-sm text-center">
         <div className="w-9 h-9 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-        <h2 className="text-lg font-bold text-white tracking-tight">Completing sign in...</h2>
-        <p className="text-xs text-slate-400 leading-relaxed">Please wait while we set up your session and redirect to your workspace.</p>
+        <h2 className="text-lg font-bold text-white tracking-tight">
+          Completing sign in...
+        </h2>
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Please wait while we set up your session and redirect to your
+          workspace.
+        </p>
       </div>
     </div>
   )

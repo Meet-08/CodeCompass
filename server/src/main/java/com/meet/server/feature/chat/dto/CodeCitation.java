@@ -1,4 +1,4 @@
-package com.meet.server.feature.codebase.dto;
+package com.meet.server.feature.chat.dto;
 
 import java.util.UUID;
 

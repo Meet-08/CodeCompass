@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getApiErrorMessage(
   error: unknown,
-  fallbackMessage = 'An unexpected error occurred'
+  fallbackMessage = 'An unexpected error occurred',
 ): string {
   if (!error || typeof error !== 'object') {
     return fallbackMessage
@@ -52,4 +52,3 @@ export function getApiErrorMessage(
 
   return fallbackMessage
 }
-

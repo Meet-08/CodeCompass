@@ -21,6 +21,12 @@ public class UserService {
                 .orElseThrow(() -> new AuthException("USER_NOT_FOUND", "User not found", HttpStatus.NOT_FOUND));
     }
 
+    @Transactional
+    public User getByIdForUpdate(UUID id) {
+        return userRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AuthException("USER_NOT_FOUND", "User not found", HttpStatus.NOT_FOUND));
+    }
+
     @Transactional(readOnly = true)
     public User getByEmail(String email) {
         return userRepository.findByEmail(email)

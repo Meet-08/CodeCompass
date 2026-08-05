@@ -2,13 +2,14 @@ spring:
   application:
     name: server
   ai:
-    model:
-      embedding: ollama
-      chat: ollama
-    ollama:
+    openai:
+      base-url: ${AZURE_OPENAI_ENDPOINT}
+      api-key: ${AZURE_OPENAI_API_KEY}
       chat:
-        model: ${CHAT_MODEL:llama3.2}
+        model: ${CHAT_MODEL}
+        temperature: 1.0
       embedding:
+        dimensions: 1024
         model: ${EMBEDDING_MODEL}
   datasource:
     url: ${POSTGRES_URL}
@@ -18,6 +19,9 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: true
   jpa:
     generate-ddl: off
   security:
@@ -35,11 +39,10 @@ spring:
             client-secret: ${GITHUB_CLIENT_SECRET}
             scope:
               - read:user
-              - user:email
-logging:
-  level:
-    com.meet.server.feature.retriver.CodeRetriever: DEBUG
-
+              - user:emails
+  docker:
+    compose:
+      enabled: false
 app:
   env: dev
   cors:

@@ -10,19 +10,32 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteRouteImport } from './routes/_app/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
+import { Route as AppCodebasesRouteImport } from './routes/_app/codebases'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as Oauth2CallbackRouteImport } from './routes/oauth2/callback'
+import { Route as AppCodebasesIndexRouteImport } from './routes/_app/codebases/index'
+import { Route as AppCodebasesCodebaseIdChatRouteImport } from './routes/_app/codebases/$codebaseId.chat'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRouteRoute = AppRouteRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRouteRoute = AuthRouteRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppCodebasesRoute = AppCodebasesRouteImport.update({
+  id: '/codebases',
+  path: '/codebases',
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/login',
@@ -39,43 +52,81 @@ const Oauth2CallbackRoute = Oauth2CallbackRouteImport.update({
   path: '/oauth2/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppCodebasesIndexRoute = AppCodebasesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCodebasesRoute,
+} as any)
+const AppCodebasesCodebaseIdChatRoute =
+  AppCodebasesCodebaseIdChatRouteImport.update({
+    id: '/$codebaseId/chat',
+    path: '/$codebaseId/chat',
+    getParentRoute: () => AppCodebasesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/codebases': typeof AppCodebasesRouteWithChildren
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
   '/oauth2/callback': typeof Oauth2CallbackRoute
+  '/codebases/': typeof AppCodebasesIndexRoute
+  '/codebases/$codebaseId/chat': typeof AppCodebasesCodebaseIdChatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
   '/oauth2/callback': typeof Oauth2CallbackRoute
+  '/codebases': typeof AppCodebasesIndexRoute
+  '/codebases/$codebaseId/chat': typeof AppCodebasesCodebaseIdChatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteRouteWithChildren
   '/_auth': typeof AuthRouteRouteWithChildren
+  '/_app/codebases': typeof AppCodebasesRouteWithChildren
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
   '/oauth2/callback': typeof Oauth2CallbackRoute
+  '/_app/codebases/': typeof AppCodebasesIndexRoute
+  '/_app/codebases/$codebaseId/chat': typeof AppCodebasesCodebaseIdChatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/register' | '/oauth2/callback'
+  fullPaths:
+    | '/'
+    | '/codebases'
+    | '/login'
+    | '/register'
+    | '/oauth2/callback'
+    | '/codebases/'
+    | '/codebases/$codebaseId/chat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/oauth2/callback'
+  to:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/oauth2/callback'
+    | '/codebases'
+    | '/codebases/$codebaseId/chat'
   id:
     | '__root__'
     | '/'
+    | '/_app'
     | '/_auth'
+    | '/_app/codebases'
     | '/_auth/login'
     | '/_auth/register'
     | '/oauth2/callback'
+    | '/_app/codebases/'
+    | '/_app/codebases/$codebaseId/chat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRouteRoute: typeof AppRouteRouteWithChildren
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   Oauth2CallbackRoute: typeof Oauth2CallbackRoute
 }
@@ -89,12 +140,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth': {
       id: '/_auth'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/codebases': {
+      id: '/_app/codebases'
+      path: '/codebases'
+      fullPath: '/codebases'
+      preLoaderRoute: typeof AppCodebasesRouteImport
+      parentRoute: typeof AppRouteRoute
     }
     '/_auth/login': {
       id: '/_auth/login'
@@ -117,8 +182,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Oauth2CallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/codebases/': {
+      id: '/_app/codebases/'
+      path: '/'
+      fullPath: '/codebases/'
+      preLoaderRoute: typeof AppCodebasesIndexRouteImport
+      parentRoute: typeof AppCodebasesRoute
+    }
+    '/_app/codebases/$codebaseId/chat': {
+      id: '/_app/codebases/$codebaseId/chat'
+      path: '/$codebaseId/chat'
+      fullPath: '/codebases/$codebaseId/chat'
+      preLoaderRoute: typeof AppCodebasesCodebaseIdChatRouteImport
+      parentRoute: typeof AppCodebasesRoute
+    }
   }
 }
+
+interface AppCodebasesRouteChildren {
+  AppCodebasesIndexRoute: typeof AppCodebasesIndexRoute
+  AppCodebasesCodebaseIdChatRoute: typeof AppCodebasesCodebaseIdChatRoute
+}
+
+const AppCodebasesRouteChildren: AppCodebasesRouteChildren = {
+  AppCodebasesIndexRoute: AppCodebasesIndexRoute,
+  AppCodebasesCodebaseIdChatRoute: AppCodebasesCodebaseIdChatRoute,
+}
+
+const AppCodebasesRouteWithChildren = AppCodebasesRoute._addFileChildren(
+  AppCodebasesRouteChildren,
+)
+
+interface AppRouteRouteChildren {
+  AppCodebasesRoute: typeof AppCodebasesRouteWithChildren
+}
+
+const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppCodebasesRoute: AppCodebasesRouteWithChildren,
+}
+
+const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
+  AppRouteRouteChildren,
+)
 
 interface AuthRouteRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
@@ -136,6 +241,7 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRouteRoute: AppRouteRouteWithChildren,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   Oauth2CallbackRoute: Oauth2CallbackRoute,
 }
