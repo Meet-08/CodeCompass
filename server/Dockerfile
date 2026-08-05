@@ -16,8 +16,8 @@ WORKDIR /app
 
 COPY --from=builder /app/build/libs/*.jar app.jar
 
-RUN addgroup -S appuser && \
-    adduser -S -G appuser appuser
+RUN groupadd --system appuser && \
+    useradd --system --gid appuser --create-home --shell /usr/sbin/nologin appuser
 
 USER appuser
 
