@@ -8,29 +8,28 @@ import type {
 } from '../types/auth.types'
 
 export async function registerApi(
-  data: RegisterInput
+  data: RegisterInput,
 ): Promise<ApiResponse<AuthResponse>> {
   const response = await apiClient.post<ApiResponse<AuthResponse>>(
     '/auth/register',
-    data
+    data,
   )
   return response.data
 }
 
 export async function loginApi(
-  data: LoginInput
+  data: LoginInput,
 ): Promise<ApiResponse<AuthResponse>> {
   const response = await apiClient.post<ApiResponse<AuthResponse>>(
     '/auth/login',
-    data
+    data,
   )
   return response.data
 }
 
 export async function refreshApi(): Promise<ApiResponse<AuthResponse>> {
-  const response = await apiClient.post<ApiResponse<AuthResponse>>(
-    '/auth/refresh'
-  )
+  const response =
+    await apiClient.post<ApiResponse<AuthResponse>>('/auth/refresh')
   return response.data
 }
 

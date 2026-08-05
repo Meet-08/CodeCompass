@@ -1,9 +1,10 @@
 import {
   useMutation,
   useQuery,
-  useQueryClient,
-  type UseQueryOptions,
+  useQueryClient
+  
 } from '@tanstack/react-query'
+import type {UseQueryOptions} from '@tanstack/react-query';
 import {
   getCurrentUserApi,
   loginApi,
@@ -26,7 +27,7 @@ export const authQueryKeys = {
 }
 
 export function useCurrentUser(
-  options?: Partial<UseQueryOptions<ApiResponse<UserResponse>, Error>>
+  options?: Partial<UseQueryOptions<ApiResponse<UserResponse>, Error>>,
 ) {
   return useQuery<ApiResponse<UserResponse>, Error>({
     queryKey: authQueryKeys.me(),
@@ -54,7 +55,7 @@ export function useLogin() {
               success: true,
               message: data.message,
               data: data.data.user,
-            }
+            },
           )
         }
       }
@@ -79,7 +80,7 @@ export function useRegister() {
               success: true,
               message: data.message,
               data: data.data.user,
-            }
+            },
           )
         }
       }
@@ -104,7 +105,7 @@ export function useRefreshToken() {
               success: true,
               message: data.message,
               data: data.data.user,
-            }
+            },
           )
         }
       }

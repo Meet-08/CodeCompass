@@ -22,6 +22,8 @@ import java.util.*;
 public class GitService {
 
     private static final int CLONE_TIMEOUT_SECONDS = 60;
+    private static final int CLEANUP_ATTEMPTS = 5;
+    private static final long CLEANUP_RETRY_DELAY_MILLIS = 250L;
 
     private static final Set<String> IGNORED_DIRECTORIES = Set.of(
             ".git", ".github", ".gitlab", ".circleci", ".idea", ".vscode",
@@ -228,14 +230,30 @@ public class GitService {
     }
 
     private void deletePath(Path path) {
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException e) {
-            throw new CodebaseException(
-                    "CODEBASE_CLEANUP_FAILED",
-                    "Unable to delete cloned repository path",
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    e);
+        IOException lastFailure = null;
+        for (int attempt = 1; attempt <= CLEANUP_ATTEMPTS; attempt++) {
+            try {
+                Files.deleteIfExists(path);
+                return;
+            } catch (IOException exception) {
+                lastFailure = exception;
+                if (attempt == CLEANUP_ATTEMPTS) {
+                    break;
+                }
+                try {
+                    Thread.sleep(CLEANUP_RETRY_DELAY_MILLIS);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    lastFailure = new IOException("Repository cleanup interrupted", interruptedException);
+                    break;
+                }
+            }
         }
+
+        throw new CodebaseException(
+                "CODEBASE_CLEANUP_FAILED",
+                "Unable to delete cloned repository path",
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                lastFailure);
     }
 }

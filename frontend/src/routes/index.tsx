@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useCurrentUser, useLogout } from '#/features/auth'
-import { LogOut, User as UserIcon, Shield, Sparkles, ArrowRight } from 'lucide-react'
+import {
+  LogOut,
+  User as UserIcon,
+  Shield,
+  Sparkles,
+  ArrowRight,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '#/lib/utils'
 
@@ -39,13 +45,19 @@ function Home() {
         {/* Navigation Header */}
         <header className="flex items-center justify-between py-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="CodeCompass Logo" className="w-10 h-10 object-contain shrink-0" />
+            <img
+              src="/logo.png"
+              alt="CodeCompass Logo"
+              className="w-10 h-10 object-contain shrink-0"
+            />
             <div>
               <h1 className="font-extrabold text-xl text-white tracking-tight flex items-center gap-2">
                 CodeCompass
                 <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
               </h1>
-              <p className="text-xs text-slate-400 font-medium">AI Code Intelligence System</p>
+              <p className="text-xs text-slate-400 font-medium">
+                AI Code Intelligence System
+              </p>
             </div>
           </div>
 
@@ -59,7 +71,9 @@ function Home() {
                 className="py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>{logoutMutation.isPending ? 'Signing out...' : 'Sign Out'}</span>
+                <span>
+                  {logoutMutation.isPending ? 'Signing out...' : 'Sign Out'}
+                </span>
               </button>
             ) : (
               <div className="flex items-center gap-3">
@@ -101,7 +115,9 @@ function Home() {
                   />
                 ) : (
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-orange-950/40 shrink-0">
-                    {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : 'U'}
+                    {currentUser.fullName
+                      ? currentUser.fullName.charAt(0).toUpperCase()
+                      : 'U'}
                   </div>
                 )}
                 <div>
@@ -125,8 +141,12 @@ function Home() {
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <Shield className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Session Status</h3>
-                <p className="text-xs text-emerald-400 font-medium">Authenticated & Token Active</p>
+                <h3 className="text-sm font-semibold text-white">
+                  Session Status
+                </h3>
+                <p className="text-xs text-emerald-400 font-medium">
+                  Authenticated & Token Active
+                </p>
               </div>
 
               <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
@@ -134,16 +154,29 @@ function Home() {
                   <UserIcon className="w-4 h-4" />
                 </div>
                 <h3 className="text-sm font-semibold text-white">User ID</h3>
-                <p className="text-xs text-slate-400 font-mono truncate">{currentUser.id}</p>
+                <p className="text-xs text-slate-400 font-mono truncate">
+                  {currentUser.id}
+                </p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center">
+              <Link
+                to="/codebases/$codebaseId/chat"
+                params={{ codebaseId: 'fc01cb89-529b-4e67-8388-c83342f2de6e' }}
+                className="p-5 rounded-2xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800 hover:border-orange-500/40 transition-all space-y-2 group cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-semibold text-white">Code Intelligence</h3>
-                <p className="text-xs text-slate-400">Workspace indexing ready</p>
-              </div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors">
+                    Chat with Codebase
+                  </h3>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-orange-400 group-hover:translate-x-1 transition-all" />
+                </div>
+                <p className="text-xs text-orange-400 font-mono">
+                  ID: fc01cb89...
+                </p>
+              </Link>
             </div>
           </div>
         ) : (
@@ -160,7 +193,9 @@ function Home() {
             </h2>
 
             <p className="text-slate-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-              Sign in or create an account to start performing semantic code searches, mapping dependency graphs, and generating real-time architecture insights.
+              Sign in or create an account to start performing semantic code
+              searches, mapping dependency graphs, and generating real-time
+              architecture insights.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -184,4 +219,3 @@ function Home() {
     </div>
   )
 }
-

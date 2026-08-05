@@ -21,6 +21,9 @@ public class RateLimitConfig {
     @Value("${spring.data.redis.host}")
     private String redisHost;
 
+    @Value("${spring.data.redis.password}")
+    private String redisPassword;
+
     @Value("${spring.data.redis.port}")
     private int redisPort;
 
@@ -30,6 +33,8 @@ public class RateLimitConfig {
                 RedisURI.builder()
                         .withHost(redisHost)
                         .withPort(redisPort)
+                        .withSsl(true)
+                        .withPassword(redisPassword)
                         .build()
         );
     }

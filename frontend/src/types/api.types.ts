@@ -15,4 +15,3 @@ export interface ApiErrorResponse {
   message: string
   data?: null | Record<string, string>
 }
-

@@ -1,6 +1,6 @@
 package com.meet.server.feature.retriver;
 
-import com.meet.server.feature.codebase.dto.CodeCitation;
+import com.meet.server.feature.chat.dto.CodeCitation;
 import com.meet.server.feature.codechunk.CodeChunkRepository;
 import com.meet.server.feature.embedding.SimilaritySearchRequest;
 import lombok.RequiredArgsConstructor;
