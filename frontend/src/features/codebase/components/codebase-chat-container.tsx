@@ -6,19 +6,26 @@ import {
   AlertCircle,
   Bot,
   RefreshCw,
+  Loader2,
 } from 'lucide-react'
-import { useChatStream } from '../hooks/use-codebase'
-import { ChatMessageItem  } from './chat-message-item'
-import type {ChatMessage} from './chat-message-item';
+import { useChatStream, useChatHistory } from '#/features/chat'
+import { ChatMessageItem } from './chat-message-item'
+import type { ChatMessage } from './chat-message-item'
 
 interface CodebaseChatContainerProps {
   codebaseId: string
   codebaseName?: string
+  sessionId?: string | null
+  onSessionResolved?: (sessionId: string) => void
+  onTitleResolved?: (title: string) => void
 }
 
 export function CodebaseChatContainer({
   codebaseId,
   codebaseName,
+  sessionId,
+  onSessionResolved,
+  onTitleResolved,
 }: CodebaseChatContainerProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -28,16 +35,25 @@ export function CodebaseChatContainer({
     },
   ])
   const [inputPrompt, setInputPrompt] = useState('')
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(
+    sessionId ?? null,
+  )
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const {
     messages: streamingContent,
     citations: streamingCitations,
+    streamTitle,
     isStreaming,
     error,
+    chatId: resolvedChatId,
     sendMessage,
     abort,
   } = useChatStream(codebaseId)
+
+  // Fetch persisted message history when a session is selected
+  const { data: historyResponse, isFetching: isLoadingHistory } =
+    useChatHistory(codebaseId, sessionId)
 
   // Scroll to bottom when messages update or streaming changes
   const scrollToBottom = () => {
@@ -47,6 +63,60 @@ export function CodebaseChatContainer({
   useEffect(() => {
     scrollToBottom()
   }, [chatMessages, streamingContent, isStreaming])
+
+  // Reset chat messages when sessionId changes (session switch)
+  const prevSessionIdRef = useRef(sessionId)
+  useEffect(() => {
+    if (prevSessionIdRef.current !== sessionId) {
+      abort()
+      setChatMessages([
+        {
+          id: 'welcome',
+          role: 'assistant',
+          content: sessionId
+            ? `Loading conversation history…`
+            : `Hello! I am your AI assistant for ${codebaseName || 'this repository'}. Ask me anything about the codebase structure, classes, API routes, or specific logic!`,
+        },
+      ])
+      setCurrentSessionId(sessionId ?? null)
+      prevSessionIdRef.current = sessionId
+    }
+  }, [sessionId, codebaseName, abort])
+
+  // Hydrate chat messages from fetched history
+  const hydratedSessionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (
+      sessionId &&
+      historyResponse?.success &&
+      historyResponse.data?.messages &&
+      hydratedSessionRef.current !== sessionId
+    ) {
+      hydratedSessionRef.current = sessionId
+      const historicMessages: ChatMessage[] = historyResponse.data.messages.map(
+        (msg) => ({
+          id: msg.messageId,
+          role: msg.role === 'USER' ? 'user' : 'assistant',
+          content: msg.content,
+        }),
+      )
+      if (historicMessages.length > 0) {
+        setChatMessages(historicMessages)
+      } else {
+        setChatMessages([
+          {
+            id: 'welcome',
+            role: 'assistant',
+            content: `Continuing conversation for ${codebaseName || 'this repository'}. Send a message to continue.`,
+          },
+        ])
+      }
+    }
+    // Reset hydration tracker when session is cleared
+    if (!sessionId) {
+      hydratedSessionRef.current = null
+    }
+  }, [sessionId, historyResponse, codebaseName])
 
   // Sync completed stream to message history
   const prevStreamingRef = useRef(isStreaming)
@@ -67,6 +137,21 @@ export function CodebaseChatContainer({
     prevStreamingRef.current = isStreaming
   }, [isStreaming, streamingContent, streamingCitations])
 
+  // Capture resolved chatId from the stream done event
+  useEffect(() => {
+    if (resolvedChatId) {
+      setCurrentSessionId(resolvedChatId)
+      onSessionResolved?.(resolvedChatId)
+    }
+  }, [resolvedChatId, onSessionResolved])
+
+  // Capture resolved title from the stream
+  useEffect(() => {
+    if (streamTitle) {
+      onTitleResolved?.(streamTitle)
+    }
+  }, [streamTitle, onTitleResolved])
+
   const handleSend = (textToSend?: string) => {
     const prompt = (textToSend || inputPrompt).trim()
     if (!prompt || isStreaming) return
@@ -82,8 +167,11 @@ export function CodebaseChatContainer({
     setInputPrompt('')
 
     // Trigger API SSE stream
+    // FIX: Use the resolved session ID if we have one, or omit chatId to create
+    // a new session. The spec requires chatId to be a valid UUID or absent/blank.
+    // Sending 'default' would cause a 400 INVALID_CHAT_ID error.
     sendMessage({
-      chatId: 'default',
+      chatId: currentSessionId || undefined,
       message: prompt,
     })
   }
@@ -97,6 +185,7 @@ export function CodebaseChatContainer({
 
   const handleClearChat = () => {
     abort()
+    setCurrentSessionId(null)
     setChatMessages([
       {
         id: 'welcome',
@@ -113,7 +202,7 @@ export function CodebaseChatContainer({
   ]
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] bg-[#080B11] text-slate-100 rounded-3xl border border-slate-800/80 overflow-hidden shadow-2xl relative">
+    <div className="flex flex-col h-full bg-[#080B11] text-slate-100 rounded-3xl border border-slate-800/80 overflow-hidden shadow-2xl relative">
       {/* Background Ambient Glow */}
       <div className="absolute top-0 right-0 w-[40%] h-[30%] bg-orange-500/5 blur-[120px] pointer-events-none" />
 
@@ -129,7 +218,7 @@ export function CodebaseChatContainer({
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </h2>
             <p className="text-[11px] text-slate-400 font-mono truncate max-w-xs sm:max-w-md">
-              Target: {codebaseName || codebaseId}
+              {streamTitle || codebaseName || codebaseId}
             </p>
           </div>
         </div>
@@ -137,10 +226,10 @@ export function CodebaseChatContainer({
         <button
           onClick={handleClearChat}
           className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-          title="Reset conversation"
+          title="Start a new conversation"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Reset Chat</span>
+          <span className="hidden sm:inline">New Chat</span>
         </button>
       </div>
 
@@ -149,6 +238,14 @@ export function CodebaseChatContainer({
         {chatMessages.map((msg) => (
           <ChatMessageItem key={msg.id} message={msg} />
         ))}
+
+        {/* History Loading Indicator */}
+        {isLoadingHistory && sessionId && (
+          <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
+            <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
+            <span className="text-xs">Loading conversation history…</span>
+          </div>
+        )}
 
         {/* Active Streaming Message */}
         {isStreaming && (
@@ -178,7 +275,10 @@ export function CodebaseChatContainer({
 
       {/* Quick Prompt Chips (Visible when list has only welcome message) */}
       {chatMessages.length <= 1 && !isStreaming && (
-        <div className="px-4 sm:px-6 py-2 flex flex-wrap gap-2 z-10">
+        <div className="px-4 sm:px-6 py-3 flex flex-wrap gap-2 z-10 border-t border-slate-800/40">
+          <p className="w-full text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">
+            Suggested Questions
+          </p>
           {samplePrompts.map((promptText, idx) => (
             <button
               key={idx}
@@ -205,7 +305,7 @@ export function CodebaseChatContainer({
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question about this repository... (Press Enter to send, Shift+Enter for newline)"
+            placeholder="Ask a question about this repository... (Enter to send, Shift+Enter for newline)"
             rows={1}
             className="flex-1 bg-transparent border-0 text-slate-100 text-xs sm:text-sm placeholder:text-slate-500 focus:outline-none resize-none max-h-32 p-1 font-sans"
           />

@@ -33,9 +33,9 @@ export function CodebaseCard({
   isDeleting,
   isReindexing,
 }: CodebaseCardProps) {
-
   const isIndexed = codebase.status === 'INDEXED'
-  const isActive = codebase.status === 'QUEUED' || codebase.status === 'PROCESSING'
+  const isActive =
+    codebase.status === 'QUEUED' || codebase.status === 'PROCESSING'
 
   const renderStatusBadge = () => {
     switch (codebase.status) {
@@ -125,7 +125,9 @@ export function CodebaseCard({
           {codebase.lastCommitSha && (
             <div className="px-2.5 py-1 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 flex items-center gap-1.5 text-[11px]">
               <GitCommitHorizontal className="w-3 h-3 text-violet-400" />
-              <span className="font-mono">{codebase.lastCommitSha.slice(0, 7)}</span>
+              <span className="font-mono">
+                {codebase.lastCommitSha.slice(0, 7)}
+              </span>
             </div>
           )}
         </div>
@@ -172,7 +174,9 @@ export function CodebaseCard({
               onClick={() => onDelete(codebase.codebaseId)}
               disabled={isDeleting || isActive}
               className="p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-400 hover:text-red-300 shadow-sm shadow-red-950/20 active:scale-95 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed disabled:bg-slate-900/50 disabled:border-slate-800/50 disabled:text-slate-600 disabled:shadow-none disabled:active:scale-100"
-              title={isActive ? 'Cannot delete while indexing' : 'Delete codebase'}
+              title={
+                isActive ? 'Cannot delete while indexing' : 'Delete codebase'
+              }
             >
               {isDeleting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

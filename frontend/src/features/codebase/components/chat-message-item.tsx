@@ -1,6 +1,6 @@
 import { Bot, User as UserIcon, BookOpen, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
-import type { CodeCitation } from '../types/codebase.types'
+import type { CodeCitation } from '#/features/chat'
 import { CitationBadge } from './citation-badge'
 
 export interface ChatMessage {
@@ -49,8 +49,11 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
             <FormattedMarkdown content={message.content} />
           )}
 
+          {/* Streaming cursor */}
           {message.isStreaming && (
-            <span className="inline-block w-2 h-4 ml-1 bg-orange-400 animate-pulse align-middle" />
+            <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
+              <span className="w-1.5 h-4 bg-orange-400 rounded-sm animate-pulse" />
+            </span>
           )}
         </div>
 

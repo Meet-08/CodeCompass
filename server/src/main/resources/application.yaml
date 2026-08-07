@@ -40,9 +40,6 @@ spring:
             scope:
               - read:user
               - user:emails
-  docker:
-    compose:
-      enabled: false
 app:
   env: dev
   cors:

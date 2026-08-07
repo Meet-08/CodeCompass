@@ -22,11 +22,6 @@ export const codebaseImportResponseSchema = z.object({
   fileCount: z.number().int().min(0),
 })
 
-export const codeChatRequestSchema = z.object({
-  chatId: z.string().optional(),
-  message: z.string().min(1, 'Message is required'),
-})
-
 export const codebaseResponseSchema = z.object({
   codebaseId: z.uuid(),
   name: z.string(),
@@ -43,13 +38,4 @@ export const codebaseResponseSchema = z.object({
 export const codebaseUpdateRequestSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   branch: z.string().min(1, 'Branch is required'),
-})
-
-export const codeCitationSchema = z.object({
-  chunkId: z.uuid(),
-  path: z.string(),
-  startLine: z.number().int().nullable(),
-  endLine: z.number().int().nullable(),
-  language: z.string().nullable(),
-  distance: z.number(),
 })
