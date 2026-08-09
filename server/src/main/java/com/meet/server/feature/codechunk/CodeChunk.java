@@ -44,12 +44,12 @@ public class CodeChunk extends BaseAuditEntity {
 
     @Column(name = "chunk_index", nullable = false)
     private Integer chunkIndex;
-    
+
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @JdbcTypeCode(SqlTypes.VECTOR)
-    @Column(columnDefinition = "vector")
+    @JdbcTypeCode(SqlTypes.VECTOR_FLOAT16)
+    @Column(name = "embedding", columnDefinition = "halfvec(3072)")
     private float[] embedding;
 
     private String language;

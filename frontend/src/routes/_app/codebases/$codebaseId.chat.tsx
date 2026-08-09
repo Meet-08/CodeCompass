@@ -36,10 +36,6 @@ function CodebaseChatPage() {
 
   return (
     <div className="h-screen bg-[#080B11] text-slate-100 font-sans relative overflow-hidden flex flex-col">
-      {/* Dynamic Background Glow */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[20%] w-[40%] h-[40%] bg-orange-500/10 blur-[130px] rounded-full" />
-      </div>
 
       {/* Top Navigation Bar */}
       <header className="flex items-center justify-between py-2.5 px-4 sm:px-6 bg-[#0A0E16]/90 border-b border-slate-800/80 z-10 shrink-0">
@@ -53,7 +49,7 @@ function CodebaseChatPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 text-orange-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 text-cyan-400 flex items-center justify-center">
               <FolderGit2 className="w-4 h-4" />
             </div>
             <div>
@@ -64,7 +60,7 @@ function CodebaseChatPage() {
               <div className="flex items-center gap-3">
                 {codebaseInfo?.branch && (
                   <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <GitBranch className="w-3 h-3 text-orange-400" />
+                    <GitBranch className="w-3 h-3 text-cyan-400" />
                     <span>{codebaseInfo.branch}</span>
                   </p>
                 )}

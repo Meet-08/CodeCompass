@@ -39,7 +39,7 @@ export function CitationBadge({ citation }: CitationBadgeProps) {
         className="w-full p-2.5 flex items-center justify-between gap-2 hover:bg-slate-800/50 transition-colors text-left cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <FileCode className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+          <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           <span className="font-mono text-[11px] text-slate-200 truncate" title={citation.path}>
             {fileName}
           </span>
@@ -52,7 +52,7 @@ export function CitationBadge({ citation }: CitationBadgeProps) {
 
         <div className="flex items-center gap-2 shrink-0">
           {citation.language && (
-            <span className="px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-400 text-[10px] font-semibold uppercase">
+            <span className="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 text-[10px] font-semibold uppercase">
               {citation.language}
             </span>
           )}

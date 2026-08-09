@@ -124,7 +124,7 @@ export function ChatSessionSidebar({
         </button>
         <button
           onClick={onNewChat}
-          className="p-3 text-orange-400 hover:text-orange-300 transition-colors cursor-pointer"
+          className="p-3 text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
           title="New chat"
         >
           <Plus className="w-4 h-4" />
@@ -136,7 +136,7 @@ export function ChatSessionSidebar({
               onClick={() => onSelectSession(s.sessionId)}
               className={`w-full p-3 transition-colors cursor-pointer ${
                 activeSessionId === s.sessionId
-                  ? 'text-orange-400 bg-orange-500/10'
+                  ? 'text-cyan-400 bg-cyan-500/10'
                   : 'text-slate-500 hover:text-slate-300'
               }`}
               title={s.title}
@@ -159,7 +159,7 @@ export function ChatSessionSidebar({
         <div className="flex items-center gap-1">
           <button
             onClick={onNewChat}
-            className="p-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-400 hover:text-orange-300 transition-all cursor-pointer"
+            className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400 hover:text-cyan-300 transition-all cursor-pointer"
             title="New chat"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -201,7 +201,7 @@ export function ChatSessionSidebar({
                 key={session.sessionId}
                 className={`group mx-1.5 rounded-xl transition-all ${
                   isActive
-                    ? 'bg-orange-500/10 border border-orange-500/20'
+                    ? 'bg-cyan-500/10 border border-cyan-500/20'
                     : 'hover:bg-slate-900/80 border border-transparent'
                 }`}
               >
@@ -243,7 +243,7 @@ export function ChatSessionSidebar({
                         if (e.key === 'Escape') setEditingId(null)
                       }}
                       autoFocus
-                      className="flex-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-[11px] focus:outline-none focus:border-orange-500/50"
+                      className="flex-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-[11px] focus:outline-none focus:border-cyan-500/50"
                     />
                     <button
                       onClick={() => handleSaveEdit(session.sessionId)}
@@ -265,19 +265,26 @@ export function ChatSessionSidebar({
                   </div>
                 ) : (
                   /* Normal session item */
-                  <button
+                  <div
                     onClick={() => onSelectSession(session.sessionId)}
-                    className="w-full p-2.5 flex items-start gap-2.5 text-left cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        onSelectSession(session.sessionId)
+                      }
+                    }}
+                    className="w-full p-2.5 flex items-start gap-2.5 text-left cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 rounded-xl"
                   >
                     <MessageSquare
                       className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                        isActive ? 'text-orange-400' : 'text-slate-500'
+                        isActive ? 'text-cyan-400' : 'text-slate-500'
                       }`}
                     />
                     <div className="flex-1 min-w-0">
                       <p
                         className={`text-[12px] font-semibold truncate ${
-                          isActive ? 'text-orange-300' : 'text-slate-200'
+                          isActive ? 'text-cyan-300' : 'text-slate-200'
                         }`}
                       >
                         {session.title}
@@ -317,7 +324,7 @@ export function ChatSessionSidebar({
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
-                  </button>
+                  </div>
                 )}
               </div>
             )

@@ -19,9 +19,9 @@ import type {
 export const chatQueryKeys = {
   all: ['chat'] as const,
   sessions: (codebaseId: string) =>
-    [...chatQueryKeys.all, 'sessions', codebaseId] as const,
+    [...chatQueryKeys.all, 'sessions-list', codebaseId] as const,
   session: (codebaseId: string, sessionId: string) =>
-    [...chatQueryKeys.sessions(codebaseId), sessionId] as const,
+    [...chatQueryKeys.all, 'session-detail', codebaseId, sessionId] as const,
   messages: (codebaseId: string, sessionId: string) =>
     [...chatQueryKeys.session(codebaseId, sessionId), 'messages'] as const,
 }

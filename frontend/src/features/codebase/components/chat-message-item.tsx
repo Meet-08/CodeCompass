@@ -24,7 +24,7 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
     >
       {/* Bot Avatar */}
       {!isUser && (
-        <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white flex items-center justify-center shadow-lg shadow-orange-950/30 shrink-0 mt-1">
+        <div className="w-9 h-9 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 mt-1">
           <Bot className="w-5 h-5" />
         </div>
       )}
@@ -36,7 +36,7 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
         <div
           className={`p-4 sm:p-5 rounded-3xl text-sm leading-relaxed ${
             isUser
-              ? 'bg-orange-600 text-white rounded-tr-sm shadow-md shadow-orange-950/20'
+              ? 'bg-gradient-to-r from-cyan-600 to-blue-600 border border-cyan-500/30 text-white rounded-tr-sm shadow-md shadow-cyan-950/20 font-medium'
               : 'bg-[#0F141E] border border-slate-800 text-slate-200 rounded-tl-sm shadow-xl'
           }`}
         >
@@ -52,7 +52,7 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
           {/* Streaming cursor */}
           {message.isStreaming && (
             <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
-              <span className="w-1.5 h-4 bg-orange-400 rounded-sm animate-pulse" />
+              <span className="w-1.5 h-4 bg-cyan-400 rounded-sm animate-pulse" />
             </span>
           )}
         </div>
@@ -61,7 +61,7 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
         {!isUser && message.citations && message.citations.length > 0 && (
           <div className="p-3.5 rounded-2xl bg-[#080B11]/80 border border-slate-800/80 space-y-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 border-b border-slate-800/80 pb-2">
-              <BookOpen className="w-3.5 h-3.5 text-orange-400" />
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
               <span>Source Code Citations ({message.citations.length})</span>
             </div>
 
@@ -79,7 +79,7 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
 
       {/* User Avatar */}
       {isUser && (
-        <div className="w-9 h-9 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 flex items-center justify-center shrink-0 mt-1">
+        <div className="w-9 h-9 rounded-2xl bg-cyan-950/60 border border-cyan-800/50 text-cyan-300 flex items-center justify-center shrink-0 mt-1 shadow-sm">
           <UserIcon className="w-4 h-4" />
         </div>
       )}
@@ -123,7 +123,7 @@ function FormattedMarkdown({ content }: { content: string }) {
                     ? 'text-base font-extrabold text-white mt-3 mb-1'
                     : headingLevel === 2
                       ? 'text-sm font-extrabold text-white mt-2.5 mb-1'
-                      : 'text-xs font-bold text-orange-400 mt-2 mb-1'
+                      : 'text-xs font-bold text-cyan-400 mt-2 mb-1'
                 return (
                   <div key={lineIdx} className={headingClasses}>
                     {renderInlineFormatted(text)}
@@ -136,7 +136,7 @@ function FormattedMarkdown({ content }: { content: string }) {
                 return (
                   <div
                     key={lineIdx}
-                    className="pl-3.5 border-l-2 border-orange-500/40 text-slate-200 my-1 font-sans"
+                    className="pl-3.5 border-l-2 border-cyan-500/40 text-slate-200 my-1 font-sans"
                   >
                     {renderInlineFormatted(line)}
                   </div>
@@ -167,7 +167,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
 
   return (
     <div className="my-3 rounded-2xl bg-[#080B11] border border-slate-800/90 overflow-hidden shadow-lg">
-      <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800/80 text-[10px] font-mono text-orange-400 font-semibold uppercase tracking-wider flex items-center justify-between">
+      <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800/80 text-[10px] font-mono text-cyan-400 font-semibold uppercase tracking-wider flex items-center justify-between">
         <span>{lang || 'code'}</span>
         <button
           onClick={handleCopy}
@@ -207,7 +207,7 @@ function renderInlineFormatted(text: string) {
       return (
         <code
           key={idx}
-          className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-orange-300 text-[11px]"
+          className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono text-cyan-300 text-[11px]"
         >
           {token.slice(1, -1)}
         </code>

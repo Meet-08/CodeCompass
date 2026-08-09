@@ -27,7 +27,7 @@ CREATE TABLE code_chunks
     codebase_id UUID                           NOT NULL,
     chunk_index INTEGER                        NOT NULL,
     content     TEXT                           NOT NULL,
-    embedding   vector(1024),
+    embedding   halfvec(3072),
     language    VARCHAR(255),
     path        VARCHAR(1024)                  NOT NULL,
     start_line  INTEGER,

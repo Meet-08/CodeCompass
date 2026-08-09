@@ -2,13 +2,13 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Send,
   Square,
-  Sparkles,
   AlertCircle,
   Bot,
   RefreshCw,
   Loader2,
 } from 'lucide-react'
 import { useChatStream, useChatHistory } from '#/features/chat'
+import type { CodeCitation } from '#/features/chat'
 import { ChatMessageItem } from './chat-message-item'
 import type { ChatMessage } from './chat-message-item'
 
@@ -39,6 +39,7 @@ export function CodebaseChatContainer({
     sessionId ?? null,
   )
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const citationsCacheRef = useRef<Map<string, CodeCitation[]>>(new Map())
 
   const {
     messages: streamingContent,
@@ -68,6 +69,16 @@ export function CodebaseChatContainer({
   const prevSessionIdRef = useRef(sessionId)
   useEffect(() => {
     if (prevSessionIdRef.current !== sessionId) {
+      // If this session change is simply resolving a newly created session locally, preserve local messages!
+      if (
+        currentSessionId &&
+        sessionId === currentSessionId &&
+        prevSessionIdRef.current === null
+      ) {
+        prevSessionIdRef.current = sessionId
+        return
+      }
+
       abort()
       setChatMessages([
         {
@@ -81,7 +92,7 @@ export function CodebaseChatContainer({
       setCurrentSessionId(sessionId ?? null)
       prevSessionIdRef.current = sessionId
     }
-  }, [sessionId, codebaseName, abort])
+  }, [sessionId, codebaseName, abort, currentSessionId])
 
   // Hydrate chat messages from fetched history
   const hydratedSessionRef = useRef<string | null>(null)
@@ -94,11 +105,15 @@ export function CodebaseChatContainer({
     ) {
       hydratedSessionRef.current = sessionId
       const historicMessages: ChatMessage[] = historyResponse.data.messages.map(
-        (msg) => ({
-          id: msg.messageId,
-          role: msg.role === 'USER' ? 'user' : 'assistant',
-          content: msg.content,
-        }),
+        (msg) => {
+          const cachedCitations = citationsCacheRef.current.get(msg.messageId)
+          return {
+            id: msg.messageId,
+            role: msg.role === 'USER' ? 'user' : 'assistant',
+            content: msg.content,
+            citations: cachedCitations,
+          }
+        },
       )
       if (historicMessages.length > 0) {
         setChatMessages(historicMessages)
@@ -118,15 +133,19 @@ export function CodebaseChatContainer({
     }
   }, [sessionId, historyResponse, codebaseName])
 
-  // Sync completed stream to message history
+  // Sync completed stream to message history & save citations cache
   const prevStreamingRef = useRef(isStreaming)
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming) {
       if (streamingContent.trim()) {
+        const msgId = `assistant-${Date.now()}`
+        if (streamingCitations && streamingCitations.length > 0) {
+          citationsCacheRef.current.set(msgId, streamingCitations)
+        }
         setChatMessages((prev) => [
           ...prev,
           {
-            id: `assistant-${Date.now()}`,
+            id: msgId,
             role: 'assistant',
             content: streamingContent,
             citations: streamingCitations,
@@ -166,10 +185,6 @@ export function CodebaseChatContainer({
     setChatMessages((prev) => [...prev, userMsg])
     setInputPrompt('')
 
-    // Trigger API SSE stream
-    // FIX: Use the resolved session ID if we have one, or omit chatId to create
-    // a new session. The spec requires chatId to be a valid UUID or absent/blank.
-    // Sending 'default' would cause a 400 INVALID_CHAT_ID error.
     sendMessage({
       chatId: currentSessionId || undefined,
       message: prompt,
@@ -195,21 +210,12 @@ export function CodebaseChatContainer({
     ])
   }
 
-  const samplePrompts = [
-    'How does repository clone and indexing work?',
-    'What API endpoints are available in this codebase?',
-    'Explain the security filter and JWT auth setup.',
-  ]
-
   return (
     <div className="flex flex-col h-full bg-[#080B11] text-slate-100 rounded-3xl border border-slate-800/80 overflow-hidden shadow-2xl relative">
-      {/* Background Ambient Glow */}
-      <div className="absolute top-0 right-0 w-[40%] h-[30%] bg-orange-500/5 blur-[120px] pointer-events-none" />
-
       {/* Header Bar */}
       <div className="p-4 sm:px-6 bg-[#0F141E]/90 border-b border-slate-800/80 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center">
             <Bot className="w-4 h-4" />
           </div>
           <div>
@@ -228,7 +234,7 @@ export function CodebaseChatContainer({
           className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
           title="Start a new conversation"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
           <span className="hidden sm:inline">New Chat</span>
         </button>
       </div>
@@ -239,10 +245,10 @@ export function CodebaseChatContainer({
           <ChatMessageItem key={msg.id} message={msg} />
         ))}
 
-        {/* History Loading Indicator */}
-        {isLoadingHistory && sessionId && (
+        {/* History Loading Indicator (only show during initial load) */}
+        {isLoadingHistory && sessionId && chatMessages.length <= 1 && (
           <div className="flex items-center justify-center py-8 gap-2 text-slate-500">
-            <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
+            <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
             <span className="text-xs">Loading conversation history…</span>
           </div>
         )}
@@ -273,25 +279,6 @@ export function CodebaseChatContainer({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompt Chips (Visible when list has only welcome message) */}
-      {chatMessages.length <= 1 && !isStreaming && (
-        <div className="px-4 sm:px-6 py-3 flex flex-wrap gap-2 z-10 border-t border-slate-800/40">
-          <p className="w-full text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-1">
-            Suggested Questions
-          </p>
-          {samplePrompts.map((promptText, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleSend(promptText)}
-              className="px-3 py-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs flex items-center gap-1.5 transition-all cursor-pointer hover:border-orange-500/30"
-            >
-              <Sparkles className="w-3 h-3 text-orange-400" />
-              <span>{promptText}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Input Form Footer */}
       <div className="p-4 sm:p-5 bg-[#0F141E]/90 border-t border-slate-800/80 z-10">
         <form
@@ -299,7 +286,7 @@ export function CodebaseChatContainer({
             e.preventDefault()
             handleSend()
           }}
-          className="flex items-end gap-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 focus-within:border-orange-500/50 transition-all"
+          className="flex items-end gap-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all"
         >
           <textarea
             value={inputPrompt}
@@ -323,7 +310,7 @@ export function CodebaseChatContainer({
             <button
               type="submit"
               disabled={!inputPrompt.trim()}
-              className="py-2 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-orange-950/30"
+              className="py-2 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-cyan-950/30"
             >
               <span>Send</span>
               <Send className="w-3.5 h-3.5" />
