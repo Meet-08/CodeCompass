@@ -184,6 +184,7 @@ export function streamChatApi(
                 } catch {
                   callbacks.onDone(event.data)
                 }
+                ctrl.abort()
                 break
               case 'error':
                 try {

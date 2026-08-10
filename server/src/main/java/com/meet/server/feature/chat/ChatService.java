@@ -50,14 +50,7 @@ public class ChatService {
     @Transactional
     public Flux<ServerSentEvent<Object>> stream(UUID userId, UUID codebaseId, CodeChatRequest request) {
         String message = request.message().trim();
-        ChatSession session;
-        try {
-            session = chatSessionService.resolve(userId, codebaseId, request.chatId());
-        } catch (Exception error) {
-            log.error("Unable to resolve chat session for userId={}, codebaseId={}, chatId={}",
-                    userId, codebaseId, request.chatId(), error);
-            return Flux.just(sse("error", Map.of("message", "Unable to start chat")));
-        }
+        ChatSession session = chatSessionService.resolve(userId, codebaseId, request.chatId());
         List<Message> history = chatMessageService.loadPromptHistory(session.getId());
         boolean firstResponse = !chatMessageService.hasAssistantResponse(session.getId());
         chatMessageService.saveUserMessage(session, message);
