@@ -195,6 +195,7 @@ export function streamChatApi(
                 } catch {
                   callbacks.onError(event.data || 'Unknown stream error')
                 }
+                ctrl.abort()
                 break
             }
           },
