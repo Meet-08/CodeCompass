@@ -19,9 +19,10 @@ import {
   CodebaseDeleteDialog,
   useCodebases,
   useDeleteCodebase,
-  useReindexCodebase,
-  type CodebaseResponse,
+  useReindexCodebase
+  
 } from '#/features/codebase'
+import type {CodebaseResponse} from '#/features/codebase';
 import { getApiErrorMessage } from '#/lib/utils'
 
 export const Route = createFileRoute('/_app/codebases/')({
@@ -33,8 +34,10 @@ const MAX_CODEBASES = 5
 function CodebasesIndexPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
-  const [editingCodebase, setEditingCodebase] = useState<CodebaseResponse | null>(null)
-  const [deletingCodebase, setDeletingCodebase] = useState<CodebaseResponse | null>(null)
+  const [editingCodebase, setEditingCodebase] =
+    useState<CodebaseResponse | null>(null)
+  const [deletingCodebase, setDeletingCodebase] =
+    useState<CodebaseResponse | null>(null)
 
   const {
     data: codebasesResponse,
@@ -52,7 +55,9 @@ function CodebasesIndexPage() {
 
   const handleImportClick = () => {
     if (codebases.length >= MAX_CODEBASES) {
-      toast.error(`You can have at most ${MAX_CODEBASES} codebases. Delete an existing one first.`)
+      toast.error(
+        `You can have at most ${MAX_CODEBASES} codebases. Delete an existing one first.`,
+      )
       return
     }
     setIsImportModalOpen(true)
@@ -89,7 +94,9 @@ function CodebasesIndexPage() {
     reindexMutation.mutate(codebaseId, {
       onSuccess: (response) => {
         if (response.success) {
-          toast.success('Codebase reindex queued. Use the refresh button to check progress.')
+          toast.success(
+            'Codebase reindex queued. Use the refresh button to check progress.',
+          )
         } else {
           toast.error(response.message || 'Failed to queue reindex')
         }
@@ -109,7 +116,8 @@ function CodebasesIndexPage() {
   const filteredCodebases = codebases.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.cloneUrl?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+      (c.cloneUrl?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+        false) ||
       (c.branch?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false),
   )
 
@@ -162,7 +170,9 @@ function CodebasesIndexPage() {
               className="py-3 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               title="Refresh codebases status"
             >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`}
+              />
               <span>Refresh</span>
             </button>
 
@@ -255,7 +265,9 @@ function CodebasesIndexPage() {
           <div className="flex items-center justify-center py-20">
             <div className="flex items-center gap-3 text-slate-400">
               <Loader2 className="w-6 h-6 animate-spin text-orange-400" />
-              <span className="text-sm font-semibold">Loading codebases...</span>
+              <span className="text-sm font-semibold">
+                Loading codebases...
+              </span>
             </div>
           </div>
         )}
@@ -266,9 +278,13 @@ function CodebasesIndexPage() {
             <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white">Failed to load codebases</h3>
+            <h3 className="text-base font-bold text-white">
+              Failed to load codebases
+            </h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              {queryError instanceof Error ? queryError.message : 'An unexpected error occurred while fetching your codebases.'}
+              {queryError instanceof Error
+                ? queryError.message
+                : 'An unexpected error occurred while fetching your codebases.'}
             </p>
             <button
               onClick={() => refetch()}
@@ -308,7 +324,9 @@ function CodebasesIndexPage() {
                 <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center mx-auto">
                   <FileCode className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-white">No codebases found</h3>
+                <h3 className="text-base font-bold text-white">
+                  No codebases found
+                </h3>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto">
                   {searchQuery
                     ? 'No codebase matches your search query. Try clearing filters.'

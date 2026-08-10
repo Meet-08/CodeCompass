@@ -3,7 +3,7 @@ package com.meet.server.feature.codechunk;
 import com.meet.server.feature.codebase.Codebase;
 import com.meet.server.feature.embedding.SimilaritySearchRequest;
 import com.meet.server.feature.repositoryfile.RepositoryFile;
-import com.pgvector.PGvector;
+import com.pgvector.PGhalfvec;
 import lombok.RequiredArgsConstructor;
 import org.postgresql.util.PGobject;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,30 +12,30 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.*;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
+
 
 @Repository
 @RequiredArgsConstructor
 public class CodeChunkRepositoryImpl implements CodeChunkRepository {
 
     private static final int BATCH_SIZE = 500;
+    private static final int EMBEDDING_DIMENSIONS = 3072;
+
     private static final String CHUNK_COLUMNS = """
-            c.id, c.created_at, c.updated_at, c.file_id, c.codebase_id,
-            c.chunk_index, c.content, c.embedding, c.language, c.path,
-            c.start_line, c.end_line, c.commit_sha
+            c.id, c.created_at, c.updated_at, c.file_id, c.codebase_id, c.chunk_index, c.content,
+            c.embedding,c.language,c.path,c.start_line,c.end_line,c.commit_sha
             """;
 
     private static final String INSERT_SQL = """
             INSERT INTO code_chunks (
-                id, created_at, updated_at, file_id, codebase_id, chunk_index,
-                content, embedding, language, path, start_line, end_line, commit_sha
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (file_id, chunk_index) DO UPDATE SET
+                id, created_at, updated_at, file_id, codebase_id, chunk_index, content, embedding,
+                language, path, start_line, end_line, commit_sha
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (file_id, chunk_index)
+            DO UPDATE SET
                 updated_at = EXCLUDED.updated_at,
                 content = EXCLUDED.content,
                 embedding = EXCLUDED.embedding,
@@ -49,8 +49,11 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
     private final JdbcClient jdbcClient;
     private final JdbcTemplate jdbcTemplate;
 
-    private static void bindChunk(PreparedStatement statement, CodeChunk chunk, Timestamp now)
-            throws SQLException {
+    private static void bindChunk(
+            PreparedStatement statement,
+            CodeChunk chunk,
+            Timestamp now
+    ) throws SQLException {
         UUID id = chunk.getId();
         if (id == null) {
             id = UUID.randomUUID();
@@ -62,9 +65,9 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         statement.setTimestamp(3, now);
         statement.setObject(4, requiredId(chunk.getFile(), "file"));
         statement.setObject(5, requiredId(chunk.getCodebase(), "codebase"));
-        statement.setObject(6, chunk.getChunkIndex());
+        statement.setInt(6, chunk.getChunkIndex());
         statement.setString(7, chunk.getContent());
-        setVector(statement, 8, chunk.getEmbedding());
+        setHalfVector(statement, 8, chunk.getEmbedding());
         statement.setString(9, chunk.getLanguage());
         statement.setString(10, chunk.getPath());
         setNullableInt(statement, 11, chunk.getStartLine());
@@ -72,17 +75,37 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         statement.setString(13, chunk.getCommitSha());
     }
 
-    private static void setVector(PreparedStatement statement, int index, float[] vector)
-            throws SQLException {
-        if (vector == null) {
+    private static void setHalfVector(
+            PreparedStatement statement,
+            int index,
+            float[] embedding
+    ) throws SQLException {
+        if (embedding == null) {
             statement.setNull(index, Types.OTHER);
-        } else {
-            statement.setObject(index, new PGvector(vector));
+            return;
+        }
+
+        validateEmbedding(embedding);
+
+        statement.setObject(index, new PGhalfvec(embedding));
+    }
+
+    private static void validateEmbedding(float[] embedding) {
+        if (embedding.length != EMBEDDING_DIMENSIONS) {
+            throw new IllegalArgumentException(
+                    "Expected a "
+                            + EMBEDDING_DIMENSIONS
+                            + "-dimensional embedding, but received "
+                            + embedding.length
+            );
         }
     }
 
-    private static void setNullableInt(PreparedStatement statement, int index, Integer value)
-            throws SQLException {
+    private static void setNullableInt(
+            PreparedStatement statement,
+            int index,
+            Integer value
+    ) throws SQLException {
         if (value == null) {
             statement.setNull(index, Types.INTEGER);
         } else {
@@ -90,12 +113,19 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         }
     }
 
-    private static UUID requiredId(Object entity, String name) {
-        UUID id = entity instanceof RepositoryFile file ? file.getId()
-                : entity instanceof Codebase codebase ? codebase.getId() : null;
-        if (id == null) {
+    private static UUID requiredId(
+            Object entity,
+            String name
+    ) {
+        UUID id = entity instanceof RepositoryFile file
+                ? file.getId()
+                : entity instanceof Codebase codebase
+                ? codebase.getId()
+                : null;
+
+        if (id == null)
             throw new IllegalArgumentException("A code chunk must have a " + name + " id");
-        }
+
         return id;
     }
 
@@ -103,21 +133,84 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         return value != null && !value.isBlank();
     }
 
-    private static float[] readVector(Object value) throws SQLException {
-        if (value == null) {
-            return null;
+    private static float[] readHalfVector(
+            Object value
+    ) throws SQLException {
+        switch (value) {
+            case null -> {
+                return null;
+            }
+            case PGhalfvec halfvec -> {
+                float[] embedding = halfvec.toArray();
+                validateEmbedding(embedding);
+                return embedding;
+            }
+            case PGobject pgObject -> {
+                String literal = pgObject.getValue();
+                if (literal == null || literal.isBlank()) {
+                    return null;
+                }
+                float[] embedding = parseHalfVectorLiteral(literal);
+                validateEmbedding(embedding);
+                return embedding;
+            }
+            case String literal -> {
+                if (literal.isBlank()) {
+                    return null;
+                }
+                float[] embedding = parseHalfVectorLiteral(literal);
+                validateEmbedding(embedding);
+                return embedding;
+            }
+            default -> {
+            }
         }
-        if (value instanceof PGvector vector) {
-            return vector.toArray();
-        }
-
-        String literal = value instanceof PGobject pgObject ? pgObject.getValue() : value.toString();
-        return new PGvector(literal).toArray();
+        throw new SQLException(
+                "Unexpected PostgreSQL embedding type: "
+                        + value.getClass().getName()
+        );
     }
 
-    private static Instant readInstant(ResultSet rs, String column) throws SQLException {
+    private static float[] parseHalfVectorLiteral(
+            String literal
+    ) throws SQLException {
+        String value = literal.trim();
+        if (!value.startsWith("[") || !value.endsWith("]")) {
+            throw new SQLException(
+                    "Invalid halfvec value: " + literal
+            );
+        }
+
+        String body = value.substring(1, value.length() - 1);
+
+        if (body.isBlank()) {
+            return new float[0];
+        }
+
+        String[] values = body.split(",");
+        float[] embedding = new float[values.length];
+
+        try {
+            for (int i = 0; i < values.length; i++) {
+                embedding[i] = Float.parseFloat(
+                        values[i].trim()
+                );
+            }
+        } catch (NumberFormatException ex) {
+            throw new SQLException("Invalid halfvec value: " + literal, ex);
+        }
+
+        return embedding;
+    }
+
+    private static Instant readInstant(
+            ResultSet rs,
+            String column
+    ) throws SQLException {
         Timestamp timestamp = rs.getTimestamp(column);
-        return timestamp == null ? null : timestamp.toInstant();
+        return timestamp == null
+                ? null
+                : timestamp.toInstant();
     }
 
     @Override
@@ -127,44 +220,89 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         }
 
         Timestamp now = Timestamp.from(Instant.now());
-        jdbcTemplate.batchUpdate(INSERT_SQL, chunks, BATCH_SIZE,
-                (statement, chunk) -> bindChunk(statement, chunk, now));
-        var chunksByFile = chunks.stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        chunk -> requiredId(chunk.getFile(), "file")));
+
+        jdbcTemplate.batchUpdate(
+                INSERT_SQL,
+                chunks,
+                BATCH_SIZE,
+                (statement, chunk) ->
+                        bindChunk(statement, chunk, now)
+        );
+
+        var chunksByFile = chunks.stream().collect(
+                Collectors.groupingBy(
+                        chunk ->
+                                requiredId(chunk.getFile(), "file")
+                )
+        );
+
         for (var entry : chunksByFile.entrySet()) {
-            var chunkIndexes = entry.getValue().stream()
+            var chunkIndexes = entry.getValue()
+                    .stream()
                     .map(CodeChunk::getChunkIndex)
                     .toList();
+
             Map<Integer, UUID> persistedIds = new HashMap<>();
+
             jdbcClient.sql("""
-                            SELECT id, chunk_index FROM code_chunks
-                            WHERE file_id = :fileId AND chunk_index IN (:chunkIndexes)
+                            SELECT id, chunk_index
+                            FROM code_chunks
+                            WHERE file_id = :fileId
+                              AND chunk_index IN (:chunkIndexes)
                             """)
                     .param("fileId", entry.getKey())
                     .param("chunkIndexes", chunkIndexes)
-                    .query((rs, rowNum) -> Map.entry(
-                            rs.getInt("chunk_index"), rs.getObject("id", UUID.class)))
+                    .query((rs, rowNum) ->
+                            Map.entry(
+                                    rs.getInt("chunk_index"),
+                                    rs.getObject("id", UUID.class)
+                            )
+                    )
                     .list()
-                    .forEach(id -> persistedIds.put(id.getKey(), id.getValue()));
+                    .forEach(
+                            id ->
+                                    persistedIds.put(id.getKey(), id.getValue())
+                    );
+
             for (CodeChunk chunk : entry.getValue()) {
-                UUID persistedId = persistedIds.get(chunk.getChunkIndex());
+                UUID persistedId =
+                        persistedIds.get(chunk.getChunkIndex());
+
                 if (persistedId == null) {
-                    throw new IllegalStateException("Persisted code chunk was not found");
+                    throw new IllegalStateException(
+                            "Persisted code chunk was not found "
+                                    + "for file="
+                                    + entry.getKey()
+                                    + ", chunkIndex="
+                                    + chunk.getChunkIndex()
+                    );
                 }
+
                 chunk.setId(persistedId);
             }
         }
     }
 
     @Override
-    public void updateEmbedding(UUID chunkId, float[] embedding) {
+    public void updateEmbedding(
+            UUID chunkId,
+            float[] embedding
+    ) {
+        if (embedding != null) {
+            validateEmbedding(embedding);
+        }
+
         jdbcClient.sql("""
                         UPDATE code_chunks
-                        SET embedding = :embedding, updated_at = :updatedAt
+                        SET embedding = :embedding,
+                            updated_at = :updatedAt
                         WHERE id = :id
                         """)
-                .param("embedding", embedding == null ? null : new PGvector(embedding))
+                .param("embedding",
+                        embedding == null
+                                ? null
+                                : new PGhalfvec(embedding)
+                )
                 .param("updatedAt", Timestamp.from(Instant.now()))
                 .param("id", chunkId)
                 .update();
@@ -172,114 +310,204 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
 
     @Override
     public void deleteByFileId(UUID fileId) {
-        jdbcClient.sql("DELETE FROM code_chunks WHERE file_id = :fileId")
+        jdbcClient.sql("""
+                        DELETE FROM code_chunks
+                        WHERE file_id = :fileId
+                        """)
                 .param("fileId", fileId)
                 .update();
     }
 
     @Override
-    public void deleteByCodebaseId(UUID codebaseId) {
-        jdbcClient.sql("DELETE FROM code_chunks WHERE codebase_id = :codebaseId")
+    public void deleteByCodebaseId(
+            UUID codebaseId
+    ) {
+        jdbcClient.sql("""
+                        DELETE FROM code_chunks
+                        WHERE codebase_id = :codebaseId
+                        """)
                 .param("codebaseId", codebaseId)
                 .update();
     }
 
     @Override
-    public Optional<CodeChunk> findById(UUID chunkId) {
+    public Optional<CodeChunk> findById(
+            UUID chunkId
+    ) {
+
         return jdbcClient.sql("""
                         SELECT %s
                         FROM code_chunks c
                         WHERE c.id = :id
-                        """.formatted(CHUNK_COLUMNS))
+                        """.formatted(
+                        CHUNK_COLUMNS
+                ))
                 .param("id", chunkId)
                 .query(this::mapChunk)
                 .optional();
     }
 
     @Override
-    public List<SimilaritySearchResult> similaritySearch(SimilaritySearchRequest request) {
-        if (request == null || request.codebaseId() == null
-                || request.embedding() == null || request.embedding().length == 0) {
+    public List<SimilaritySearchResult> similaritySearch(
+            SimilaritySearchRequest request
+    ) {
+        if (request == null
+                || request.codebaseId() == null
+                || request.embedding() == null
+                || request.embedding().length == 0) {
+
             return List.of();
         }
+
+        validateEmbedding(
+                request.embedding()
+        );
 
         StringBuilder sql = new StringBuilder("""
                 SELECT ranked.*
                 FROM (
-                    SELECT %s, c.embedding <=> :embedding AS distance
+                    SELECT
+                        %s,
+                        c.embedding <=> :embedding AS distance
                     FROM code_chunks c
-                """.formatted(CHUNK_COLUMNS));
+                """.formatted(
+                CHUNK_COLUMNS
+        ));
 
         if (hasText(request.branch())) {
-            sql.append(" JOIN codebases b ON b.id = c.codebase_id");
+            sql.append("""
+                    JOIN codebases b
+                        ON b.id = c.codebase_id
+                    """);
         }
+
         sql.append("""
                     WHERE c.codebase_id = :codebaseId
                       AND c.embedding IS NOT NULL
                 """);
-        if (hasText(request.language())) {
-            sql.append(" AND c.language = :language");
-        }
-        if (hasText(request.branch())) {
-            sql.append(" AND b.branch = :branch");
-        }
-        if (hasText(request.commitSha())) {
-            sql.append(" AND c.commit_sha = :commitSha");
-        }
-        sql.append(") ranked\n");
-        if (request.maxDistance() != null) {
-            sql.append("WHERE ranked.distance <= :maxDistance\n");
-        }
-        sql.append("ORDER BY ranked.distance\nLIMIT :topK\n");
 
-        var statement = jdbcClient.sql(sql.toString())
+        if (hasText(request.language())) {
+            sql.append("""
+                    AND c.language = :language
+                    """);
+        }
+
+        if (hasText(request.branch())) {
+            sql.append("""
+                    AND b.branch = :branch
+                    """);
+        }
+
+        if (hasText(request.commitSha())) {
+            sql.append("""
+                    AND c.commit_sha = :commitSha
+                    """);
+        }
+
+        sql.append("""
+                ) ranked
+                """);
+
+        if (request.maxDistance() != null) {
+            sql.append("""
+                    WHERE ranked.distance <= :maxDistance
+                    """);
+        }
+
+        sql.append("""
+                ORDER BY ranked.distance
+                LIMIT :topK
+                """);
+
+        var statement = jdbcClient
+                .sql(sql.toString())
                 .param("codebaseId", request.codebaseId())
-                .param("embedding", new PGvector(request.embedding()))
+                .param("embedding",
+                        new PGhalfvec(
+                                request.embedding()
+                        )
+                )
                 .param("topK", Math.max(1, request.topK()));
+
         if (request.maxDistance() != null) {
             statement = statement.param("maxDistance", request.maxDistance());
         }
+
         if (hasText(request.language())) {
             statement = statement.param("language", request.language());
         }
+
         if (hasText(request.branch())) {
             statement = statement.param("branch", request.branch());
         }
+
         if (hasText(request.commitSha())) {
             statement = statement.param("commitSha", request.commitSha());
         }
 
-        return statement.query(this::mapSimilarityResult).list();
+        return statement
+                .query(this::mapSimilarityResult)
+                .list();
     }
 
-    private SimilaritySearchResult mapSimilarityResult(ResultSet rs, int rowNum) throws SQLException {
-        return new SimilaritySearchResult(mapChunk(rs, rowNum), rs.getDouble("distance"));
+    private SimilaritySearchResult mapSimilarityResult(
+            ResultSet rs,
+            int rowNum
+    ) throws SQLException {
+        return new SimilaritySearchResult(
+                mapChunk(rs, rowNum),
+                rs.getDouble("distance")
+        );
     }
 
     @Override
-    public long countByCodebaseId(UUID codebaseId) {
-        return jdbcClient.sql("SELECT COUNT(*) FROM code_chunks WHERE codebase_id = :codebaseId")
+    public long countByCodebaseId(
+            UUID codebaseId
+    ) {
+        return jdbcClient
+                .sql("""
+                        SELECT COUNT(*)
+                        FROM code_chunks
+                        WHERE codebase_id = :codebaseId
+                        """)
                 .param("codebaseId", codebaseId)
                 .query(Long.class)
                 .single();
     }
 
-    private CodeChunk mapChunk(ResultSet rs, int rowNum) throws SQLException {
+    private CodeChunk mapChunk(
+            ResultSet rs,
+            int rowNum
+    ) throws SQLException {
         CodeChunk chunk = CodeChunk.builder()
                 .id(rs.getObject("id", UUID.class))
-                .file(RepositoryFile.builder().id(rs.getObject("file_id", UUID.class)).build())
-                .codebase(Codebase.builder().id(rs.getObject("codebase_id", UUID.class)).build())
-                .chunkIndex((Integer) rs.getObject("chunk_index"))
+                .file(RepositoryFile.builder()
+                        .id(rs.getObject("file_id", UUID.class))
+                        .build()
+                )
+                .codebase(Codebase.builder()
+                        .id(rs.getObject("codebase_id", UUID.class))
+                        .build()
+                )
+                .chunkIndex(
+                        (Integer) rs.getObject("chunk_index")
+                )
                 .content(rs.getString("content"))
-                .embedding(readVector(rs.getObject("embedding")))
+                .embedding(readHalfVector(rs.getObject("embedding"))
+                )
                 .language(rs.getString("language"))
                 .path(rs.getString("path"))
-                .startLine((Integer) rs.getObject("start_line"))
-                .endLine((Integer) rs.getObject("end_line"))
-                .commitSha(rs.getString("commit_sha"))
+                .startLine((Integer) rs.getObject("start_line")
+                )
+                .endLine((Integer) rs.getObject("end_line")
+                )
+                .commitSha(rs.getString("commit_sha")
+                )
                 .build();
+
         chunk.setCreatedAt(readInstant(rs, "created_at"));
         chunk.setUpdatedAt(readInstant(rs, "updated_at"));
+
         return chunk;
     }
 }

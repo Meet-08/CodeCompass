@@ -9,7 +9,6 @@ spring:
         model: ${CHAT_MODEL}
         temperature: 1.0
       embedding:
-        dimensions: 1024
         model: ${EMBEDDING_MODEL}
   datasource:
     url: ${POSTGRES_URL}
@@ -40,9 +39,6 @@ spring:
             scope:
               - read:user
               - user:emails
-  docker:
-    compose:
-      enabled: false
 app:
   env: dev
   cors:

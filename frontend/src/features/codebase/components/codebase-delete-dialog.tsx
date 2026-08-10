@@ -37,9 +37,7 @@ export function CodebaseDeleteDialog({
               <h2 className="text-lg font-extrabold text-white tracking-tight">
                 Delete Codebase
               </h2>
-              <p className="text-xs text-slate-400">
-                Confirm deletion request
-              </p>
+              <p className="text-xs text-slate-400">Confirm deletion request</p>
             </div>
           </div>
           <button
@@ -63,7 +61,8 @@ export function CodebaseDeleteDialog({
           <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              This action cannot be undone. All indexed files and vectors will be permanently removed.
+              This action cannot be undone. All indexed files and vectors will
+              be permanently removed.
             </span>
           </div>
         </div>

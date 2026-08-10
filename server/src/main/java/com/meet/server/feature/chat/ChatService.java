@@ -1,65 +1,68 @@
 package com.meet.server.feature.chat;
 
-import com.meet.server.common.exception.CodebaseException;
 import com.meet.server.feature.advisor.CodeAdvisor;
 import com.meet.server.feature.chat.dto.CodeChatRequest;
 import com.meet.server.feature.chat.dto.CodeCitation;
-import com.meet.server.feature.codebase.CodebaseRepository;
+import com.meet.server.feature.chat.message.ChatMessageService;
+import com.meet.server.feature.chat.session.ChatSession;
+import com.meet.server.feature.chat.session.ChatSessionService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.http.HttpStatus;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
+@Slf4j
 public class ChatService {
 
-    private static final Logger log = LoggerFactory.getLogger(ChatService.class);
-
-    private final CodebaseRepository codebaseRepository;
+    private final ChatSessionService chatSessionService;
+    private final ChatMessageService chatMessageService;
+    private final ChatTitleService chatTitleService;
     private final ChatClient chatClient;
     private final JsonMapper jsonMapper;
 
     public ChatService(
-            CodebaseRepository codebaseRepository,
+            ChatSessionService chatSessionService,
+            ChatMessageService chatMessageService,
+            ChatTitleService chatTitleService,
             ChatClient.Builder chatClientBuilder,
             CodeAdvisor codeAdvisor,
             JsonMapper jsonMapper
     ) {
-        this.codebaseRepository = codebaseRepository;
+        this.chatSessionService = chatSessionService;
+        this.chatMessageService = chatMessageService;
+        this.chatTitleService = chatTitleService;
         this.jsonMapper = jsonMapper;
-        ChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(20).build();
-        var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
-        this.chatClient = chatClientBuilder.defaultAdvisors(memoryAdvisor, codeAdvisor).build();
+        this.chatClient = chatClientBuilder.defaultAdvisors(codeAdvisor).build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Flux<ServerSentEvent<Object>> stream(UUID userId, UUID codebaseId, CodeChatRequest request) {
-        var codebase = codebaseRepository.findById(codebaseId).orElseThrow(() ->
-                new CodebaseException("CODEBASE_NOT_FOUND", "Codebase not found", HttpStatus.NOT_FOUND));
-        if (codebase.getUser() == null || !userId.equals(codebase.getUser().getId())) {
-            throw new CodebaseException("CODEBASE_FORBIDDEN", "You do not own this codebase", HttpStatus.FORBIDDEN);
-        }
-        String chatId = request.chatId() == null || request.chatId().isBlank() ? "default" : request.chatId().trim();
-        String conversationId = userId + ":" + codebaseId + ":" + chatId;
-        var citations = new AtomicReference<List<CodeCitation>>(List.of());
+        String message = request.message().trim();
+        ChatSession session = chatSessionService.resolve(userId, codebaseId, request.chatId());
+        List<Message> history = chatMessageService.loadPromptHistory(session.getId());
+        boolean firstResponse = !chatMessageService.hasAssistantResponse(session.getId());
+        chatMessageService.saveUserMessage(session, message);
 
-        return chatClient.prompt().user(request.message().trim())
-                .advisors(advisors -> advisors
-                        .param(ChatMemory.CONVERSATION_ID, conversationId)
-                        .param(CodeAdvisor.CODEBASE_ID_CONTEXT, codebaseId))
+        String chatId = session.getId().toString();
+        var citations = new AtomicReference<List<CodeCitation>>(List.of());
+        var answer = new StringBuilder();
+        var promptMessages = new ArrayList<>(history);
+        promptMessages.add(new UserMessage(message));
+
+        return chatClient.prompt().messages(promptMessages)
+                .advisors(advisors -> advisors.param(CodeAdvisor.CODEBASE_ID_CONTEXT, codebaseId))
                 .stream().chatClientResponse()
                 .flatMap(response -> {
                     var responseCitations = response.context().get(CodeAdvisor.CITATIONS_CONTEXT);
@@ -71,20 +74,33 @@ public class ChatService {
                     }
 
                     var chatResponse = response.chatResponse();
-                    if (chatResponse == null || chatResponse.getResult() == null
-                            || chatResponse.getResult().getOutput() == null) {
+                    if (chatResponse == null || chatResponse.getResult() == null) {
                         return Flux.empty();
+                    } else {
+                        chatResponse.getResult();
                     }
 
                     var text = chatResponse.getResult().getOutput().getText();
                     if (text == null || text.isEmpty()) {
                         return Flux.empty();
                     }
+                    answer.append(text);
                     return Flux.just(sse("message", text));
                 })
-                .concatWith(Flux.defer(() -> Flux.just(
-                        sse("citations", citations.get()),
-                        sse("done", chatId))))
+                .doOnComplete(() -> {
+                    if (!answer.isEmpty()) {
+                        chatMessageService.saveAssistantMessage(session, answer.toString());
+                    }
+                })
+                .concatWith(Flux.defer(() -> {
+                    var events = new ArrayList<ServerSentEvent<Object>>();
+                    events.add(sse("citations", citations.get()));
+                    if (firstResponse && !answer.isEmpty()) {
+                        events.add(sse("title", chatTitleService.generateAndSave(chatClient, session, message)));
+                    }
+                    events.add(sse("done", chatId));
+                    return Flux.fromIterable(events);
+                }))
                 .onErrorResume(error -> {
                     log.error("Chat streaming failed for userId={}, codebaseId={}, chatId={}",
                             userId, codebaseId, chatId, error);

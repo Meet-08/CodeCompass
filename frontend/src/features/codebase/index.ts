@@ -9,3 +9,5 @@ export * from './components/codebase-card'
 export * from './components/citation-badge'
 export * from './components/chat-message-item'
 export * from './components/codebase-chat-container'
+export * from './components/chat-session-sidebar'
+

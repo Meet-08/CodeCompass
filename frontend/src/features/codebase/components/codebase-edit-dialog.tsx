@@ -1,11 +1,5 @@
 import { useState, useEffect } from 'react'
-import {
-  X,
-  GitBranch,
-  Pencil,
-  AlertCircle,
-  Loader2,
-} from 'lucide-react'
+import { X, GitBranch, Pencil, AlertCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useUpdateCodebase } from '../hooks/use-codebase'
 import { getApiErrorMessage } from '#/lib/utils'

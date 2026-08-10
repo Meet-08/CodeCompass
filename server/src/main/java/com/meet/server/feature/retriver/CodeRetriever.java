@@ -21,11 +21,11 @@ public class CodeRetriever {
     private final EmbeddingModel embeddingModel;
 
     public RetrievalContext retrieve(UUID codebaseId, String query) {
-        log.debug("Retrieving code for {} using query {}", codebaseId, query);
+        log.info("Retrieving code for {} using query {}", codebaseId, query);
         var request = SimilaritySearchRequest.builder()
                 .codebaseId(codebaseId)
                 .embedding(embeddingModel.embed(query))
-                .topK(1)
+                .topK(12)
                 .build();
         var results = codeChunkRepository.similaritySearch(request);
         var citations = results.stream().map(result -> {
@@ -44,7 +44,7 @@ public class CodeRetriever {
                     .append(" ---\n").append(snippet).append('\n');
             remaining -= snippet.length();
         }
-        log.debug("Total relevant code snippets: {}", citations.size());
+        log.info("Total relevant code snippets: {}", citations.size());
         return new RetrievalContext(context.toString(), citations);
     }
 
