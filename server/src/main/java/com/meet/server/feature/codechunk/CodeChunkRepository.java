@@ -22,4 +22,9 @@ public interface CodeChunkRepository {
     List<SimilaritySearchResult> similaritySearch(SimilaritySearchRequest request);
 
     long countByCodebaseId(UUID codebaseId);
+
+    List<CodeChunk> findByCodebaseIdAndChunkType(UUID codebaseId, ChunkType chunkType);
+
+    List<FullTextSearchResult> fullTextSearch(UUID codebaseId, String query, int maxResults);
 }
+

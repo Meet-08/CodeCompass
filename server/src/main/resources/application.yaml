@@ -2,14 +2,19 @@ spring:
   application:
     name: server
   ai:
-    openai:
-      base-url: ${AZURE_OPENAI_ENDPOINT}
-      api-key: ${AZURE_OPENAI_API_KEY}
+    ollama:
       chat:
         model: ${CHAT_MODEL}
-        temperature: 1.0
       embedding:
         model: ${EMBEDDING_MODEL}
+  #    openai:
+  #      base-url: ${AZURE_OPENAI_ENDPOINT}
+  #      api-key: ${AZURE_OPENAI_API_KEY}
+  #      chat:
+  #        model: ${CHAT_MODEL}
+  #        temperature: 1.0
+  #      embedding:
+  #        model: ${EMBEDDING_MODEL}
   datasource:
     url: ${POSTGRES_URL}
     password: ${POSTGRES_PASSWORD}

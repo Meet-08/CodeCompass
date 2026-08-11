@@ -1,5 +1,6 @@
 package com.meet.server.feature.indexing.extractor;
 
+import com.meet.server.feature.codechunk.ChunkType;
 import com.meet.server.feature.codechunk.CodeChunk;
 import com.meet.server.feature.indexing.language.Language;
 import com.meet.server.feature.indexing.parser.ParsedFile;
@@ -58,8 +59,22 @@ public class MarkdownExtractor implements ChunkExtractor {
     }
 
     private void add(ParsedFile parsed, List<CodeChunk> chunks, StringBuilder content, int start, int end) {
+        String text = content.toString().stripTrailing();
+        String symbolName = extractHeading(text);
         chunks.add(CodeChunk.builder().file(parsed.file()).codebase(parsed.file().getCodebase())
-                .chunkIndex(chunks.size()).content(content.toString().stripTrailing())
-                .language("markdown").path(parsed.file().getPath()).startLine(start).endLine(end).build());
+                .chunkIndex(chunks.size()).content(text)
+                .language("markdown").path(parsed.file().getPath()).startLine(start).endLine(end)
+                .chunkType(ChunkType.MARKDOWN_SECTION)
+                .symbolName(symbolName)
+                .build());
+    }
+
+    private static String extractHeading(String text) {
+        if (text == null || text.isBlank()) return null;
+        String firstLine = text.lines().findFirst().orElse("");
+        if (firstLine.startsWith("#")) {
+            return firstLine.replaceFirst("^#+\\s*", "").strip();
+        }
+        return null;
     }
 }

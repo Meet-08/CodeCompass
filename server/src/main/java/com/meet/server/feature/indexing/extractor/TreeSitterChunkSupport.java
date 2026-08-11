@@ -1,5 +1,6 @@
 package com.meet.server.feature.indexing.extractor;
 
+import com.meet.server.feature.codechunk.ChunkType;
 import com.meet.server.feature.codechunk.CodeChunk;
 import com.meet.server.feature.indexing.parser.ParsedFile;
 import org.treesitter.TSNode;
@@ -27,6 +28,12 @@ final class TreeSitterChunkSupport {
     }
 
     static void addChunk(ParsedFile parsed, TSNode node, List<CodeChunk> chunks, String content) {
+        addChunk(parsed, node, chunks, content, null, null, null, null);
+    }
+
+    static void addChunk(ParsedFile parsed, TSNode node, List<CodeChunk> chunks, String content,
+                         ChunkType chunkType, String symbolName,
+                         String symbolQualifiedName, String parentSymbol) {
         if (content == null || content.isBlank()) {
             return;
         }
@@ -39,6 +46,10 @@ final class TreeSitterChunkSupport {
                 .path(parsed.file().getPath())
                 .startLine(node.getStartPoint().getRow() + 1)
                 .endLine(node.getEndPoint().getRow() + 1)
+                .chunkType(chunkType)
+                .symbolName(symbolName)
+                .symbolQualifiedName(symbolQualifiedName)
+                .parentSymbol(parentSymbol)
                 .build());
     }
 

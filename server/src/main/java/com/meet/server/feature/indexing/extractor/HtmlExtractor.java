@@ -1,5 +1,6 @@
 package com.meet.server.feature.indexing.extractor;
 
+import com.meet.server.feature.codechunk.ChunkType;
 import com.meet.server.feature.codechunk.CodeChunk;
 import com.meet.server.feature.indexing.language.Language;
 import com.meet.server.feature.indexing.parser.ParsedFile;
@@ -39,7 +40,8 @@ public class HtmlExtractor implements ChunkExtractor {
         }
         String complete = inheritedContext + content;
         if (complete.length() <= TreeSitterChunkSupport.MAX_CHUNK_CHARACTERS) {
-            TreeSitterChunkSupport.addChunk(parsed, node, chunks, complete);
+            TreeSitterChunkSupport.addChunk(parsed, node, chunks, complete,
+                    ChunkType.HTML_ELEMENT, null, null, null);
             return;
         }
         if (depth >= MAX_RECURSION_DEPTH) {
@@ -88,7 +90,8 @@ public class HtmlExtractor implements ChunkExtractor {
         for (String line : lines) {
             if (current.length() + line.length() + 1 > TreeSitterChunkSupport.MAX_CHUNK_CHARACTERS
                     && current.length() > prefix.length()) {
-                TreeSitterChunkSupport.addChunk(parsed, node, chunks, current.toString());
+                TreeSitterChunkSupport.addChunk(parsed, node, chunks, current.toString(),
+                        ChunkType.HTML_ELEMENT, null, null, null);
                 current = new StringBuilder(prefix);
             }
             if (current.length() > prefix.length()) {
@@ -96,6 +99,7 @@ public class HtmlExtractor implements ChunkExtractor {
             }
             current.append(line);
         }
-        TreeSitterChunkSupport.addChunk(parsed, node, chunks, current.toString());
+        TreeSitterChunkSupport.addChunk(parsed, node, chunks, current.toString(),
+                ChunkType.HTML_ELEMENT, null, null, null);
     }
 }
