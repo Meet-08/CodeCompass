@@ -105,15 +105,12 @@ export function CodebaseChatContainer({
     ) {
       hydratedSessionRef.current = sessionId
       const historicMessages: ChatMessage[] = historyResponse.data.messages.map(
-        (msg) => {
-          const cachedCitations = citationsCacheRef.current.get(msg.messageId)
-          return {
-            id: msg.messageId,
-            role: msg.role === 'USER' ? 'user' : 'assistant',
-            content: msg.content,
-            citations: cachedCitations,
-          }
-        },
+        (msg) => ({
+          id: msg.messageId,
+          role: msg.role === 'USER' ? 'user' : 'assistant',
+          content: msg.content,
+          citations: msg.citations.length > 0 ? msg.citations : undefined,
+        }),
       )
       if (historicMessages.length > 0) {
         setChatMessages(historicMessages)
@@ -139,7 +136,7 @@ export function CodebaseChatContainer({
     if (prevStreamingRef.current && !isStreaming) {
       if (streamingContent.trim()) {
         const msgId = `assistant-${Date.now()}`
-        if (streamingCitations && streamingCitations.length > 0) {
+        if (streamingCitations.length > 0) {
           citationsCacheRef.current.set(msgId, streamingCitations)
         }
         setChatMessages((prev) => [

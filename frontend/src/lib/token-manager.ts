@@ -1,5 +1,5 @@
 export class TokenManager {
-  private static instance: TokenManager
+  private static instance: TokenManager | null = null
   private accessToken: string | null = null
 
   private constructor() {}

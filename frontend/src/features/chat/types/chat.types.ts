@@ -16,6 +16,7 @@ export type CodeChatRequest = z.infer<typeof codeChatRequestSchema>
 export type CodeCitation = z.infer<typeof codeCitationSchema>
 export type ChatMessageResponse = z.infer<typeof chatMessageResponseSchema>
 export type ChatHistoryResponse = z.infer<typeof chatHistoryResponseSchema>
+export type MessageRole = 'USER' | 'ASSISTANT' | 'SYSTEM'
 
 export type ChatStreamEvent =
   | { event: 'message'; data: string }

@@ -1,5 +1,6 @@
 package com.meet.server.feature.indexing.extractor;
 
+import com.meet.server.feature.codechunk.ChunkType;
 import com.meet.server.feature.codechunk.CodeChunk;
 import com.meet.server.feature.indexing.language.Language;
 import com.meet.server.feature.indexing.parser.ParsedFile;
@@ -72,6 +73,8 @@ public class JsonExtractor implements ChunkExtractor {
                 .path(parsed.file().getPath())
                 .startLine(null)
                 .endLine(null)
+                .chunkType(ChunkType.CONFIGURATION)
+                .symbolQualifiedName(path)
                 .build());
     }
 }

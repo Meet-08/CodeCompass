@@ -43,16 +43,14 @@ export function useLogin() {
         if (data.data.accessToken) {
           tokenManager.setAccessToken(data.data.accessToken)
         }
-        if (data.data.user) {
-          queryClient.setQueryData<ApiResponse<UserResponse>>(
-            authQueryKeys.me(),
-            {
-              success: true,
-              message: data.message,
-              data: data.data.user,
-            },
-          )
-        }
+        queryClient.setQueryData<ApiResponse<UserResponse>>(
+          authQueryKeys.me(),
+          {
+            success: true,
+            message: data.message,
+            data: data.data.user,
+          },
+        )
       }
     },
   })
@@ -68,16 +66,14 @@ export function useRegister() {
         if (data.data.accessToken) {
           tokenManager.setAccessToken(data.data.accessToken)
         }
-        if (data.data.user) {
-          queryClient.setQueryData<ApiResponse<UserResponse>>(
-            authQueryKeys.me(),
-            {
-              success: true,
-              message: data.message,
-              data: data.data.user,
-            },
-          )
-        }
+        queryClient.setQueryData<ApiResponse<UserResponse>>(
+          authQueryKeys.me(),
+          {
+            success: true,
+            message: data.message,
+            data: data.data.user,
+          },
+        )
       }
     },
   })
@@ -93,16 +89,14 @@ export function useRefreshToken() {
         if (data.data.accessToken) {
           tokenManager.setAccessToken(data.data.accessToken)
         }
-        if (data.data.user) {
-          queryClient.setQueryData<ApiResponse<UserResponse>>(
-            authQueryKeys.me(),
-            {
-              success: true,
-              message: data.message,
-              data: data.data.user,
-            },
-          )
-        }
+        queryClient.setQueryData<ApiResponse<UserResponse>>(
+          authQueryKeys.me(),
+          {
+            success: true,
+            message: data.message,
+            data: data.data.user,
+          },
+        )
       }
     },
   })

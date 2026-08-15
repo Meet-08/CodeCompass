@@ -19,7 +19,8 @@ import java.util.UUID;
         ),
         indexes = {
                 @Index(name = "idx_code_chunks_codebase", columnList = "codebase_id"),
-                @Index(name = "idx_code_chunks_file", columnList = "file_id")
+                @Index(name = "idx_code_chunks_file", columnList = "file_id"),
+                @Index(name = "idx_code_chunks_symbol", columnList = "symbol_qualified_name")
         }
 )
 @Builder
@@ -49,7 +50,7 @@ public class CodeChunk extends BaseAuditEntity {
     private String content;
 
     @JdbcTypeCode(SqlTypes.VECTOR_FLOAT16)
-    @Column(name = "embedding", columnDefinition = "halfvec(3072)")
+    @Column(name = "embedding", columnDefinition = "halfvec(1024)")
     private float[] embedding;
 
     private String language;
@@ -60,6 +61,15 @@ public class CodeChunk extends BaseAuditEntity {
     private Integer startLine;
 
     private Integer endLine;
+
+    private String symbolName;
+
+    private String symbolQualifiedName;
+
+    @Enumerated(EnumType.STRING)
+    private ChunkType chunkType;
+
+    private String parentSymbol;
 
     private String commitSha;
 }

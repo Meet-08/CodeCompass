@@ -2,6 +2,7 @@ package com.meet.server.feature.chat.message;
 
 import com.meet.server.common.exception.CodebaseException;
 import com.meet.server.feature.chat.dto.ChatHistoryResponse;
+import com.meet.server.feature.chat.dto.CodeCitation;
 import com.meet.server.feature.chat.session.ChatSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.messages.Message;
@@ -65,18 +66,19 @@ public class ChatMessageService {
     }
 
     public void saveUserMessage(ChatSession session, String content) {
-        saveMessage(session, MessageRole.USER, content);
+        saveMessage(session, MessageRole.USER, content, List.of());
     }
 
-    public void saveAssistantMessage(ChatSession session, String content) {
-        saveMessage(session, MessageRole.ASSISTANT, content);
+    public void saveAssistantMessage(ChatSession session, String content, List<CodeCitation> citations) {
+        saveMessage(session, MessageRole.ASSISTANT, content, citations);
     }
 
-    private void saveMessage(ChatSession session, MessageRole role, String content) {
+    private void saveMessage(ChatSession session, MessageRole role, String content, List<CodeCitation> citations) {
         chatMessageRepository.save(ChatMessage.builder()
                 .session(session)
                 .role(role)
                 .content(content)
+                .citations(citations == null ? List.of() : List.copyOf(citations))
                 .build());
     }
 

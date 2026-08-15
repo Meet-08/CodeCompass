@@ -273,7 +273,7 @@ function CodebasesIndexPage() {
         )}
 
         {/* Error State */}
-        {isError && !isLoading && (
+        {isError && (
           <div className="p-8 rounded-3xl bg-red-500/5 border border-red-500/20 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />

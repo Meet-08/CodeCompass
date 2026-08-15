@@ -21,19 +21,21 @@ import java.util.stream.Collectors;
 public class CodeChunkRepositoryImpl implements CodeChunkRepository {
 
     private static final int BATCH_SIZE = 500;
-    private static final int EMBEDDING_DIMENSIONS = 3072;
+    private static final int EMBEDDING_DIMENSIONS = 1024;
 
     private static final String CHUNK_COLUMNS = """
             c.id, c.created_at, c.updated_at, c.file_id, c.codebase_id, c.chunk_index, c.content,
-            c.embedding,c.language,c.path,c.start_line,c.end_line,c.commit_sha
+            c.embedding, c.language, c.path, c.start_line, c.end_line,
+            c.symbol_name, c.symbol_qualified_name, c.chunk_type, c.parent_symbol, c.commit_sha
             """;
 
     private static final String INSERT_SQL = """
             INSERT INTO code_chunks (
                 id, created_at, updated_at, file_id, codebase_id, chunk_index, content, embedding,
-                language, path, start_line, end_line, commit_sha
+                language, path, start_line, end_line,
+                symbol_name, symbol_qualified_name, chunk_type, parent_symbol, commit_sha
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (file_id, chunk_index)
             DO UPDATE SET
                 updated_at = EXCLUDED.updated_at,
@@ -43,6 +45,10 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
                 path = EXCLUDED.path,
                 start_line = EXCLUDED.start_line,
                 end_line = EXCLUDED.end_line,
+                symbol_name = EXCLUDED.symbol_name,
+                symbol_qualified_name = EXCLUDED.symbol_qualified_name,
+                chunk_type = EXCLUDED.chunk_type,
+                parent_symbol = EXCLUDED.parent_symbol,
                 commit_sha = EXCLUDED.commit_sha
             """;
 
@@ -72,7 +78,11 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
         statement.setString(10, chunk.getPath());
         setNullableInt(statement, 11, chunk.getStartLine());
         setNullableInt(statement, 12, chunk.getEndLine());
-        statement.setString(13, chunk.getCommitSha());
+        statement.setString(13, chunk.getSymbolName());
+        statement.setString(14, chunk.getSymbolQualifiedName());
+        statement.setString(15, chunk.getChunkType() == null ? null : chunk.getChunkType().name());
+        statement.setString(16, chunk.getParentSymbol());
+        statement.setString(17, chunk.getCommitSha());
     }
 
     private static void setHalfVector(
@@ -213,6 +223,13 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
                 : timestamp.toInstant();
     }
 
+    private static String buildTsQuery(String query) {
+        return Arrays.stream(query.trim().split("\\s+"))
+                .map(token -> token.replaceAll("[^\\w]", ""))
+                .filter(token -> !token.isEmpty())
+                .collect(Collectors.joining(" | "));
+    }
+
     @Override
     public void saveAll(Collection<CodeChunk> chunks) {
         if (chunks == null || chunks.isEmpty()) {
@@ -348,6 +365,78 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
     }
 
     @Override
+    public List<CodeChunk> findByCodebaseIdAndPath(
+            UUID codebaseId,
+            String path,
+            Integer startLine,
+            Integer endLine
+    ) {
+        if (codebaseId == null || !hasText(path)) {
+            return List.of();
+        }
+
+        StringBuilder sql = new StringBuilder("""
+                SELECT %s
+                FROM code_chunks c
+                WHERE c.codebase_id = :codebaseId
+                  AND c.path = :path
+                """.formatted(CHUNK_COLUMNS));
+
+        if (startLine != null) {
+            sql.append("""
+                      AND (c.end_line IS NULL OR c.end_line >= :startLine)
+                    """);
+        }
+        if (endLine != null) {
+            sql.append("""
+                      AND (c.start_line IS NULL OR c.start_line <= :endLine)
+                    """);
+        }
+        sql.append("""
+                ORDER BY c.chunk_index
+                """);
+
+        var statement = jdbcClient.sql(sql.toString())
+                .param("codebaseId", codebaseId)
+                .param("path", path);
+        if (startLine != null) {
+            statement = statement.param("startLine", startLine);
+        }
+        if (endLine != null) {
+            statement = statement.param("endLine", endLine);
+        }
+        return statement.query(this::mapChunk).list();
+    }
+
+    @Override
+    public List<CodeChunk> findAroundChunk(
+            UUID codebaseId,
+            UUID chunkId,
+            int radius
+    ) {
+        if (codebaseId == null || chunkId == null) {
+            return List.of();
+        }
+
+        return jdbcClient.sql("""
+                        SELECT %s
+                        FROM code_chunks c
+                        JOIN code_chunks origin
+                          ON origin.id = :chunkId
+                         AND origin.codebase_id = :codebaseId
+                         AND c.codebase_id = origin.codebase_id
+                         AND c.path = origin.path
+                         AND c.chunk_index BETWEEN origin.chunk_index - :radius AND origin.chunk_index + :radius
+                        ORDER BY c.chunk_index
+                        """.formatted(CHUNK_COLUMNS))
+                .param("codebaseId", codebaseId)
+                .param("chunkId", chunkId)
+                .param("radius", Math.max(0, radius))
+                .query(this::mapChunk)
+                .list();
+    }
+
+    @Override
     public List<SimilaritySearchResult> similaritySearch(
             SimilaritySearchRequest request
     ) {
@@ -475,10 +564,75 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
                 .single();
     }
 
+    @Override
+    public List<CodeChunk> findByCodebaseIdAndChunkType(
+            UUID codebaseId,
+            ChunkType chunkType
+    ) {
+        return jdbcClient
+                .sql("""
+                        SELECT %s
+                        FROM code_chunks c
+                        WHERE c.codebase_id = :codebaseId
+                          AND c.chunk_type = :chunkType
+                        """.formatted(
+                        CHUNK_COLUMNS
+                ))
+                .param("codebaseId", codebaseId)
+                .param("chunkType", chunkType.name())
+                .query(this::mapChunk)
+                .list();
+    }
+
+    @Override
+    public List<FullTextSearchResult> fullTextSearch(
+            UUID codebaseId,
+            String query,
+            int maxResults
+    ) {
+        if (codebaseId == null || !hasText(query)) {
+            return List.of();
+        }
+
+        String tsQuery = buildTsQuery(query);
+        if (tsQuery.isEmpty()) {
+            return List.of();
+        }
+
+        String sql = """
+                SELECT
+                    %s,
+                    ts_rank_cd(to_tsvector('simple', c.content), to_tsquery('simple', :tsQuery)) AS rank
+                FROM code_chunks c
+                WHERE c.codebase_id = :codebaseId
+                  AND to_tsvector('simple', c.content) @@ to_tsquery('simple', :tsQuery)
+                ORDER BY rank DESC
+                LIMIT :maxResults
+                """.formatted(CHUNK_COLUMNS);
+
+        return jdbcClient.sql(sql)
+                .param("codebaseId", codebaseId)
+                .param("tsQuery", tsQuery)
+                .param("maxResults", Math.max(1, maxResults))
+                .query(this::mapFullTextSearchResult)
+                .list();
+    }
+
+    private FullTextSearchResult mapFullTextSearchResult(
+            ResultSet rs,
+            int rowNum
+    ) throws SQLException {
+        return new FullTextSearchResult(
+                mapChunk(rs, rowNum),
+                rs.getDouble("rank")
+        );
+    }
+
     private CodeChunk mapChunk(
             ResultSet rs,
             int rowNum
     ) throws SQLException {
+        String chunkTypeValue = rs.getString("chunk_type");
         CodeChunk chunk = CodeChunk.builder()
                 .id(rs.getObject("id", UUID.class))
                 .file(RepositoryFile.builder()
@@ -501,6 +655,10 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
                 )
                 .endLine((Integer) rs.getObject("end_line")
                 )
+                .symbolName(rs.getString("symbol_name"))
+                .symbolQualifiedName(rs.getString("symbol_qualified_name"))
+                .chunkType(chunkTypeValue == null ? null : ChunkType.valueOf(chunkTypeValue))
+                .parentSymbol(rs.getString("parent_symbol"))
                 .commitSha(rs.getString("commit_sha")
                 )
                 .build();
