@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisor;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -37,8 +38,12 @@ public class CodeAdvisor implements CallAdvisor, StreamAdvisor {
     private ChatClientRequest enrich(ChatClientRequest request) {
         Object rawId = request.context().get(CODEBASE_ID_CONTEXT);
         if (rawId == null) return request;
+        var lastMessage = request.prompt().getLastUserOrToolResponseMessage();
+        if (!(lastMessage instanceof UserMessage)) {
+            return request;
+        }
         var codebaseId = rawId instanceof UUID id ? id : UUID.fromString(rawId.toString());
-        String query = request.prompt().getLastUserOrToolResponseMessage().getText();
+        String query = lastMessage.getText();
         var retrieval = codeRetriever.retrieve(codebaseId, query);
         return request.mutate().prompt(request.prompt().augmentUserMessage(retrieval.promptContext()))
                 .context(CITATIONS_CONTEXT, retrieval.citations())

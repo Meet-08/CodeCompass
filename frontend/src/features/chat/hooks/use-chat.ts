@@ -1,5 +1,10 @@
 import { useRef, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   getChatSessionsApi,
   getChatMessagesApi,
@@ -33,6 +38,27 @@ export function useChatHistory(
   return useQuery<ApiResponse<ChatHistoryResponse>>({
     queryKey: chatQueryKeys.messages(codebaseId, sessionId ?? ''),
     queryFn: () => getChatMessagesApi(codebaseId, sessionId!, { limit: 100 }),
+    enabled: Boolean(codebaseId) && Boolean(sessionId),
+  })
+}
+
+export function useInfiniteChatHistory(
+  codebaseId: string,
+  sessionId: string | null | undefined,
+  limit = 20,
+) {
+  return useInfiniteQuery<ApiResponse<ChatHistoryResponse>>({
+    queryKey: chatQueryKeys.messages(codebaseId, sessionId ?? ''),
+    queryFn: ({ pageParam }) =>
+      getChatMessagesApi(codebaseId, sessionId!, {
+        limit,
+        before: (pageParam as string) || undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.data?.hasMore && lastPage.data.nextCursor
+        ? lastPage.data.nextCursor
+        : undefined,
     enabled: Boolean(codebaseId) && Boolean(sessionId),
   })
 }

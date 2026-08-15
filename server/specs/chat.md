@@ -2,7 +2,9 @@
 
 ## Overview
 
-The `feature.chat` module manages chat sessions associated with an owned codebase and streams code-aware assistant responses. It persists user and assistant messages, retrieves relevant code through `CodeAdvisor`, emits citations, and generates a title after the first successful response.
+The `feature.chat` module manages chat sessions associated with an owned codebase and streams code-aware assistant responses. It persists user and assistant messages, retrieves relevant code through `CodeAdvisor`, lets the model fetch more code with `CodeLookupTools` when snippets are incomplete, emits citations, and generates a title after the first successful response.
+
+Source package: `com.meet.server.feature.chat`
 
 ## Authentication and common conventions
 
@@ -15,46 +17,6 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
 - The rate-limit filter may reject any request with HTTP `429 Too Many Requests` and a plain-text body. It adds `X-Rate-Limit-Retry-After-Seconds` when rejected.
 
 ## HTTP endpoints
-
-### GET /api/codebases/{codebaseId}/chat/sessions/{sessionId}/messages
-
-- Purpose: Fetch persisted messages for an owned chat session. The first request returns the newest page; subsequent requests use `before` to fetch progressively older messages.
-- Authentication/authorization: Authentication required. The user must own the codebase and session.
-- Query parameters:
-
-  | Name | Type | Required | Constraints | Description |
-  | --- | --- | --- | --- | --- |
-  | `limit` | integer | No | `1` to `100`; default `20` | Maximum number of messages in the page. |
-  | `before` | string | No | Opaque server-issued cursor | Loads messages older than the cursor. |
-
-- Responses:
-
-  #### 200 OK
-
-  Body: `ApiResponse<ChatHistoryResponse>`.
-
-  ```json
-  {
-    "success": true,
-    "message": "Chat history retrieved",
-    "data": {
-      "messages": [
-        {
-          "messageId": "33333333-3333-3333-3333-333333333333",
-          "role": "USER",
-          "content": "Where is indexing implemented?",
-          "createdAt": "2026-08-07T10:00:00Z",
-          "updatedAt": "2026-08-07T10:00:00Z"
-        }
-      ],
-      "hasMore": true,
-      "nextCursor": "opaque-cursor"
-    }
-  }
-  ```
-
-- Messages within each response are ordered oldest to newest. When `hasMore` is false, `nextCursor` is null.
-- Errors: Invalid `limit` or `before` returns `400`. Codebase/session ownership errors return `403` or `404`; unauthenticated requests receive `401`.
 
 ### GET /api/codebases/{codebaseId}/chat/sessions
 
@@ -90,7 +52,7 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
   }
   ```
 
-- Errors: See shared errors. Ownership/domain errors are `404` or `403` as described above; unauthenticated requests receive `401`.
+- Errors: Ownership/domain errors are `404` or `403` as described above; unauthenticated requests receive `401`.
 
 ### PATCH /api/codebases/{codebaseId}/chat/sessions/{sessionId}
 
@@ -137,6 +99,71 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
 
 - Errors: A blank or missing `title` returns `400` with validation data. Ownership/session errors return `403` or `404` as described above; unauthenticated requests receive `401`.
 
+### GET /api/codebases/{codebaseId}/chat/sessions/{sessionId}/messages
+
+- Purpose: Fetch persisted messages for an owned chat session. The first request returns the newest page; subsequent requests use `before` to fetch progressively older messages.
+- Authentication/authorization: Authentication required. The user must own the codebase and session.
+- Request headers/path/query parameters:
+
+  | Name | Type | Required | Constraints | Description |
+  | --- | --- | --- | --- | --- |
+  | `Authorization` | Bearer token | Yes | Must authenticate a user | Authentication header. |
+  | `codebaseId` | UUID path parameter | Yes | Valid UUID syntax | Owning codebase identifier. |
+  | `sessionId` | UUID path parameter | Yes | Valid UUID syntax | Session whose messages are fetched. |
+  | `limit` | integer query parameter | No | `1` to `100`; default `20` | Maximum number of messages in the page. |
+  | `before` | string query parameter | No | Opaque server-issued cursor (Base64-encoded `Instant|UUID`) | Loads messages older than the cursor. |
+
+- Request body: None.
+- Responses:
+
+  #### 200 OK
+
+  Body: `ApiResponse<ChatHistoryResponse>`.
+
+  ```json
+  {
+    "success": true,
+    "message": "Chat history retrieved",
+    "data": {
+      "messages": [
+        {
+          "messageId": "33333333-3333-3333-3333-333333333333",
+          "role": "USER",
+          "content": "Where is indexing implemented?",
+          "citations": [],
+          "createdAt": "2026-08-07T10:00:00Z",
+          "updatedAt": "2026-08-07T10:00:00Z"
+        },
+        {
+          "messageId": "44444444-4444-4444-4444-444444444444",
+          "role": "ASSISTANT",
+          "content": "Indexing is implemented in RepositoryFileProcessor.",
+          "citations": [
+            {
+              "chunkId": "33333333-3333-3333-3333-333333333333",
+              "path": "src/main/java/com/meet/server/feature/indexing/RepositoryFileProcessor.java",
+              "startLine": 10,
+              "endLine": 30,
+              "language": "java",
+              "score": 0.0328
+            }
+          ],
+          "createdAt": "2026-08-07T10:00:01Z",
+          "updatedAt": "2026-08-07T10:00:01Z"
+        }
+      ],
+      "hasMore": true,
+      "nextCursor": "opaque-cursor"
+    }
+  }
+  ```
+
+- Messages within each response are ordered oldest to newest. When `hasMore` is false, `nextCursor` is null.
+- Errors:
+  - `limit` outside `1`–`100` returns `400` with error code `INVALID_CHAT_HISTORY_LIMIT`.
+  - Invalid `before` cursor returns `400` with error code `INVALID_CHAT_HISTORY_CURSOR`.
+  - Codebase/session ownership errors return `403` or `404`; unauthenticated requests receive `401`.
+
 ### DELETE /api/codebases/{codebaseId}/chat/sessions/{sessionId}
 
 - Purpose: Delete an owned chat session. Database cascade configuration removes its chat messages.
@@ -176,7 +203,7 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
   | Field | Type | Required | Nullability/constraints | Description |
   | --- | --- | --- | --- | --- |
   | `chatId` | string containing UUID | No | May be absent, null, or blank; if non-blank it must parse as UUID | Existing session to continue. Server-generated when omitted or blank. |
-  | `message` | string | Yes | `@NotBlank`; service trims it before processing | User prompt. |
+  | `message` | string | Yes | `@NotBlank(message = "message is required")`; service trims it before processing | User prompt. |
 
   ```json
   {
@@ -196,7 +223,7 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
   | Event | Data JSON type | Meaning |
   | --- | --- | --- |
   | `message` | JSON string | A streamed assistant text fragment. The fragment is also accumulated and saved as one assistant message when streaming completes. |
-  | `citations` | JSON array of `CodeCitation` | Retrieved code citations. Emitted after model output; may be empty. |
+  | `citations` | JSON array of `CodeCitation` | Retrieved code citations ranked by RRF score (higher = more relevant). Emitted after model output; may be empty. |
   | `title` | JSON string | Generated title, emitted only on the first response when a non-empty answer was produced. |
   | `done` | JSON string containing UUID | Completion marker containing the resolved chat session ID. |
   | `error` | JSON object with `message` string | Emitted when streaming fails after the stream has started; the current implementation uses `{"message":"Unable to complete chat"}`. |
@@ -208,7 +235,7 @@ The `feature.chat` module manages chat sessions associated with an owned codebas
   data: "The indexing pipeline starts in ..."
 
   event: citations
-  data: [{"chunkId":"33333333-3333-3333-3333-333333333333","path":"src/main/...","startLine":10,"endLine":30,"language":"java","distance":0.12}]
+  data: [{"chunkId":"33333333-3333-3333-3333-333333333333","path":"src/main/...","startLine":10,"endLine":30,"language":"java","score":0.0328}]
 
   event: title
   data: "Repository indexing pipeline"
@@ -225,7 +252,7 @@ The chat feature defines no WebSocket, STOMP, or message-destination handlers. C
 
 ## Shared schemas
 
-### ApiResponse<T>
+### ApiResponse\<T\>
 
 | Field | Type | Required | Nullability/constraints | Description |
 | --- | --- | --- | --- | --- |
@@ -243,16 +270,52 @@ The chat feature defines no WebSocket, STOMP, or message-destination handlers. C
 | `createdAt` | Instant | Yes | Auditing field, persisted non-null | Creation timestamp. |
 | `updatedAt` | Instant | Yes | Auditing field, persisted non-null | Last update timestamp. |
 
+### ChatHistoryResponse
+
+| Field | Type | Required | Nullability/constraints | Description |
+| --- | --- | --- | --- | --- |
+| `messages` | List\<ChatMessageResponse\> | Yes | Not nullable | Ordered oldest to newest within the page. |
+| `hasMore` | boolean | Yes | Primitive | Whether older messages exist beyond this page. |
+| `nextCursor` | string | Conditional | Null when `hasMore` is false; opaque Base64-encoded cursor otherwise | Cursor to pass as `before` for the next page. |
+
+### ChatMessageResponse
+
+| Field | Type | Required | Nullability/constraints | Description |
+| --- | --- | --- | --- | --- |
+| `messageId` | UUID | Yes | Server-generated | Message identifier. |
+| `role` | MessageRole enum | Yes | Not nullable | One of `USER`, `ASSISTANT`, `SYSTEM`. |
+| `content` | string | Yes | Not nullable, TEXT column | Message content. |
+| `citations` | List\<CodeCitation\> | Yes | Not nullable; empty list for user messages or when no snippets were retrieved | Retrieved code citations stored with the assistant message. Not sent back to the model. |
+| `createdAt` | Instant | Yes | Auditing field | Creation timestamp. |
+| `updatedAt` | Instant | Yes | Auditing field | Last update timestamp. |
+
+### MessageRole
+
+Enum values: `USER`, `ASSISTANT`, `SYSTEM`.
+
+### CodeChatRequest
+
+| Field | Type | Required | Nullability/constraints | Description |
+| --- | --- | --- | --- | --- |
+| `chatId` | string | No | Nullable; if non-blank must parse as UUID | Existing session ID to continue. |
+| `message` | string | Yes | `@NotBlank(message = "message is required")` | User prompt text. |
+
+### ChatSessionUpdateRequest
+
+| Field | Type | Required | Nullability/constraints | Description |
+| --- | --- | --- | --- | --- |
+| `title` | string | Yes | `@NotBlank(message = "title is required")` | New session title. |
+
 ### CodeCitation
 
 | Field | Type | Required | Nullability/constraints | Description |
 | --- | --- | --- | --- | --- |
 | `chunkId` | UUID | Source record has no validation annotations | Source does not specify JSON nullability | Retrieved code chunk identifier. |
 | `path` | string | Source record has no validation annotations | Source does not specify JSON nullability | Repository file path. |
-| `startLine` | integer | Source record has no validation annotations | Source does not specify JSON nullability | Retrieved chunk start line. |
-| `endLine` | integer | Source record has no validation annotations | Source does not specify JSON nullability | Retrieved chunk end line. |
+| `startLine` | Integer | Source record has no validation annotations | Nullable (boxed Integer) | Retrieved chunk start line. |
+| `endLine` | Integer | Source record has no validation annotations | Nullable (boxed Integer) | Retrieved chunk end line. |
 | `language` | string | Source record has no validation annotations | Source does not specify JSON nullability | Chunk language classification. |
-| `distance` | number | Yes in the record shape | Primitive `double` | Similarity-search distance. |
+| `score` | number | Yes in the record shape | Primitive `double` | RRF fused relevance score (higher = more relevant). Combines vector similarity and full-text search rankings. |
 
 ### Validation error response
 
@@ -280,7 +343,18 @@ The `data` map is keyed by field name. The exact JSON representation of an empty
 }
 ```
 
-Known chat-relevant domain codes are `CODEBASE_NOT_FOUND`, `CODEBASE_FORBIDDEN`, `CHAT_SESSION_NOT_FOUND`, `CHAT_SESSION_FORBIDDEN`, `INVALID_CHAT_ID`, and `USER_NOT_FOUND`. The first, third, and last are `404`; ownership failures are `403`; `INVALID_CHAT_ID` is `400`.
+Known chat-relevant domain codes and their HTTP statuses:
+
+| Error code | HTTP status | Message |
+| --- | --- | --- |
+| `CODEBASE_NOT_FOUND` | 404 | Codebase not found |
+| `CODEBASE_FORBIDDEN` | 403 | You do not own this codebase |
+| `CHAT_SESSION_NOT_FOUND` | 404 | Chat session not found |
+| `CHAT_SESSION_FORBIDDEN` | 403 | You do not own this chat session |
+| `INVALID_CHAT_ID` | 400 | chatId must be a valid UUID |
+| `INVALID_CHAT_HISTORY_LIMIT` | 400 | limit must be between 1 and 100 |
+| `INVALID_CHAT_HISTORY_CURSOR` | 400 | before must be a valid chat history cursor |
+| `USER_NOT_FOUND` | 404 | User not found |
 
 Unauthenticated requests are returned as HTTP `401` with the `ApiResponse<Void>` shape and message `Unauthorized`.
 
@@ -288,20 +362,28 @@ Unauthenticated requests are returned as HTTP `401` with the `ApiResponse<Void>`
 
 - `src/main/java/com/meet/server/feature/chat/ChatController.java`: route declarations, authentication extraction, response envelopes, and SSE content type.
 - `src/main/java/com/meet/server/feature/chat/ChatService.java`: session resolution, message persistence, advisor context, SSE event generation, title timing, and stream error behavior.
-- `src/main/java/com/meet/server/feature/chat/ChatTitleService.java`: generated title normalization and persistence.
+- `src/main/java/com/meet/server/feature/chat/ChatTitleService.java`: generated title normalization (max 255 chars, newline collapse) and persistence.
 - `src/main/java/com/meet/server/feature/chat/dto/CodeChatRequest.java`: stream request fields and `message` validation.
 - `src/main/java/com/meet/server/feature/chat/dto/ChatSessionUpdateRequest.java`: title update field and validation.
 - `src/main/java/com/meet/server/feature/chat/dto/ChatSessionResponse.java`: session response fields.
-- `src/main/java/com/meet/server/feature/chat/dto/CodeCitation.java`: citation fields.
-- `src/main/java/com/meet/server/feature/chat/session/ChatSessionService.java`: ownership checks, session creation, listing, update, deletion, and domain errors.
-- `src/main/java/com/meet/server/feature/chat/session/mapper/ChatSessionMapper.java`: entity-to-response conversion.
-- `src/main/java/com/meet/server/feature/chat/message/ChatMessageService.java`: prompt history and persisted message roles.
-- `src/main/java/com/meet/server/feature/advisor/CodeAdvisor.java`: codebase context and citation propagation.
-- `src/main/java/com/meet/server/feature/retriver/CodeRetriever.java`: similarity retrieval and citation construction.
+- `src/main/java/com/meet/server/feature/chat/dto/ChatHistoryResponse.java`: paginated history response shape.
+- `src/main/java/com/meet/server/feature/chat/dto/ChatMessageResponse.java`: message response fields.
+- `src/main/java/com/meet/server/feature/chat/dto/CodeCitation.java`: citation fields (`score` replaces former `distance`).
+- `src/main/java/com/meet/server/feature/chat/session/ChatSession.java`: session entity, user/codebase associations, cascading messages.
+- `src/main/java/com/meet/server/feature/chat/session/ChatSessionService.java`: ownership checks, session creation (`untitled-N`), listing, update, deletion, and domain errors.
+- `src/main/java/com/meet/server/feature/chat/session/ChatSessionMapper.java`: entity-to-response conversion.
+- `src/main/java/com/meet/server/feature/chat/session/ChatSessionRepository.java`: session queries (owned sessions, title uniqueness check).
+- `src/main/java/com/meet/server/feature/chat/message/ChatMessage.java`: message entity, session association, role, content, JSON citations.
+- `src/main/java/com/meet/server/feature/chat/message/ChatMessageService.java`: prompt history loading (20 most recent), cursor-based pagination, message persistence.
+- `src/main/java/com/meet/server/feature/chat/message/ChatMessageMapper.java`: entity-to-Spring AI message and entity-to-response conversion.
+- `src/main/java/com/meet/server/feature/chat/message/ChatMessageRepository.java`: recent messages, cursor-based before queries, role existence check.
+- `src/main/java/com/meet/server/feature/chat/message/MessageRole.java`: `USER`, `ASSISTANT`, `SYSTEM` enum.
+- `src/main/java/com/meet/server/feature/advisor/CodeAdvisor.java`: codebase context injection and citation propagation via Spring AI advisor chain. Skips re-retrieval on tool-response turns.
+- `src/main/java/com/meet/server/feature/chat/tool/CodeLookupTools.java`: `@Tool` methods `read_more_code` and `search_code` for expanding truncated snippets or searching again.
+- `src/main/java/com/meet/server/feature/retriver/CodeRetriever.java`: hybrid retrieval (parallel vector similarity + full-text search, RRF reranking) and citation construction.
 - `src/main/java/com/meet/server/common/api/ApiResponse.java`: common response envelope.
 - `src/main/java/com/meet/server/common/exception/GlobalExceptionHandler.java`: validation, domain, malformed-request, and unexpected-error mappings.
 - `src/main/java/com/meet/server/common/exception/CodebaseException.java`: domain error code/status model.
 - `src/main/java/com/meet/server/common/security/config/SecurityConfig.java`: authentication requirement for non-permitted routes.
 - `src/main/java/com/meet/server/common/security/handler/UnauthorizedResponseHandler.java`: unauthenticated response.
 - `src/main/java/com/meet/server/common/ratelimit/filter/RateLimiterFilter.java`: rate-limit response and headers.
-- `src/main/java/com/meet/server/feature/chat/session/ChatSession.java` and `src/main/java/com/meet/server/feature/chat/message/ChatMessage.java`: persisted session/message fields and relationships.

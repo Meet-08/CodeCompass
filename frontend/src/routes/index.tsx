@@ -4,7 +4,6 @@ import { useCurrentUser, useLogout } from '#/features/auth'
 import { useCodebases } from '#/features/codebase'
 import {
   LogOut,
-  User as UserIcon,
   Sparkles,
   ArrowRight,
   Layers,

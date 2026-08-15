@@ -20,16 +20,17 @@ export const codeChatRequestSchema = z.object({
 export const codeCitationSchema = z.object({
   chunkId: z.uuid(),
   path: z.string(),
-  startLine: z.number().int().nullable(),
-  endLine: z.number().int().nullable(),
-  language: z.string().nullable(),
-  distance: z.number(),
+  startLine: z.number().int().nullable().optional(),
+  endLine: z.number().int().nullable().optional(),
+  language: z.string().nullable().optional(),
+  score: z.number(),
 })
 
 export const chatMessageResponseSchema = z.object({
   messageId: z.uuid(),
-  role: z.enum(['USER', 'ASSISTANT']),
+  role: z.enum(['USER', 'ASSISTANT', 'SYSTEM']),
   content: z.string(),
+  citations: z.array(codeCitationSchema).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

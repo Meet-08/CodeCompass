@@ -19,6 +19,10 @@ public interface CodeChunkRepository {
 
     Optional<CodeChunk> findById(UUID chunkId);
 
+    List<CodeChunk> findByCodebaseIdAndPath(UUID codebaseId, String path, Integer startLine, Integer endLine);
+
+    List<CodeChunk> findAroundChunk(UUID codebaseId, UUID chunkId, int radius);
+
     List<SimilaritySearchResult> similaritySearch(SimilaritySearchRequest request);
 
     long countByCodebaseId(UUID codebaseId);

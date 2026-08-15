@@ -1,4 +1,4 @@
-import { Bot, User as UserIcon, BookOpen, Copy, Check } from 'lucide-react'
+import { Bot, User as UserIcon, BookOpen, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import type { CodeCitation } from '#/features/chat'
 import { CitationBadge } from './citation-badge'
@@ -17,6 +17,7 @@ interface ChatMessageItemProps {
 
 export function ChatMessageItem({ message }: ChatMessageItemProps) {
   const isUser = message.role === 'user'
+  const [showCitations, setShowCitations] = useState(false)
 
   return (
     <div
@@ -57,22 +58,49 @@ export function ChatMessageItem({ message }: ChatMessageItemProps) {
           )}
         </div>
 
-        {/* Citations Drawer if available */}
+        {/* Citations Collapsible Section (Per-Message) */}
         {!isUser && message.citations && message.citations.length > 0 && (
-          <div className="p-3.5 rounded-2xl bg-[#080B11]/80 border border-slate-800/80 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 border-b border-slate-800/80 pb-2">
-              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Source Code Citations ({message.citations.length})</span>
-            </div>
+          <div className="space-y-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setShowCitations((prev) => !prev)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#080B11]/90 hover:bg-slate-900 border border-slate-800/90 hover:border-cyan-500/40 text-xs font-medium text-slate-300 hover:text-cyan-300 transition-all cursor-pointer shadow-sm group/btn"
+              title={showCitations ? 'Hide citations' : 'Show citations'}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400 group-hover/btn:scale-110 transition-transform" />
+              <span>{showCitations ? 'Hide Citations' : 'Show Citations'}</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-mono font-semibold">
+                {message.citations.length}
+              </span>
+              {showCitations ? (
+                <ChevronUp className="w-3.5 h-3.5 text-slate-400 transition-transform" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 transition-transform" />
+              )}
+            </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {message.citations.map((citation, index) => (
-                <CitationBadge
-                  key={citation.chunkId || index}
-                  citation={citation}
-                />
-              ))}
-            </div>
+            {showCitations && (
+              <div className="p-3.5 rounded-2xl bg-[#080B11]/80 border border-slate-800/80 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-400 border-b border-slate-800/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Source Code Citations ({message.citations.length})</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                    Click snippet to expand details
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {message.citations.map((citation, index) => (
+                    <CitationBadge
+                      key={citation.chunkId || `${citation.path}-${citation.startLine}-${index}`}
+                      citation={citation}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

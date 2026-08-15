@@ -16,10 +16,12 @@ export function CitationBadge({ citation }: CitationBadgeProps) {
         ? `L${citation.startLine}`
         : ''
 
-  // Distance formatting (score indicator)
+  // RRF score formatting (higher = more relevant)
+  const scoreValue = citation.score
+  const formattedScore = scoreValue.toFixed(4)
   const scorePercentage = Math.max(
     0,
-    Math.min(100, Math.round((1 - citation.distance) * 100)),
+    Math.min(100, Math.round((scoreValue / 0.033) * 100)),
   )
 
   const scoreColor =
@@ -30,7 +32,7 @@ export function CitationBadge({ citation }: CitationBadgeProps) {
         : 'text-red-400'
 
   // Extract filename from path for compact view
-  const fileName = citation.path?.split('/').pop() || citation.path
+  const fileName = citation.path.split('/').pop() || citation.path
 
   return (
     <div className="rounded-xl bg-slate-900/90 border border-slate-800 text-xs transition-all overflow-hidden hover:border-slate-700/80">
@@ -89,7 +91,7 @@ export function CitationBadge({ citation }: CitationBadgeProps) {
                 {scorePercentage}%
               </span>
               <span className="text-slate-600 text-[9px]">
-                (d: {citation.distance.toFixed(3)})
+                (score: {formattedScore})
               </span>
             </div>
             <div className="col-span-2 flex items-center gap-1.5 text-slate-500">

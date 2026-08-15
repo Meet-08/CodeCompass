@@ -365,6 +365,78 @@ public class CodeChunkRepositoryImpl implements CodeChunkRepository {
     }
 
     @Override
+    public List<CodeChunk> findByCodebaseIdAndPath(
+            UUID codebaseId,
+            String path,
+            Integer startLine,
+            Integer endLine
+    ) {
+        if (codebaseId == null || !hasText(path)) {
+            return List.of();
+        }
+
+        StringBuilder sql = new StringBuilder("""
+                SELECT %s
+                FROM code_chunks c
+                WHERE c.codebase_id = :codebaseId
+                  AND c.path = :path
+                """.formatted(CHUNK_COLUMNS));
+
+        if (startLine != null) {
+            sql.append("""
+                      AND (c.end_line IS NULL OR c.end_line >= :startLine)
+                    """);
+        }
+        if (endLine != null) {
+            sql.append("""
+                      AND (c.start_line IS NULL OR c.start_line <= :endLine)
+                    """);
+        }
+        sql.append("""
+                ORDER BY c.chunk_index
+                """);
+
+        var statement = jdbcClient.sql(sql.toString())
+                .param("codebaseId", codebaseId)
+                .param("path", path);
+        if (startLine != null) {
+            statement = statement.param("startLine", startLine);
+        }
+        if (endLine != null) {
+            statement = statement.param("endLine", endLine);
+        }
+        return statement.query(this::mapChunk).list();
+    }
+
+    @Override
+    public List<CodeChunk> findAroundChunk(
+            UUID codebaseId,
+            UUID chunkId,
+            int radius
+    ) {
+        if (codebaseId == null || chunkId == null) {
+            return List.of();
+        }
+
+        return jdbcClient.sql("""
+                        SELECT %s
+                        FROM code_chunks c
+                        JOIN code_chunks origin
+                          ON origin.id = :chunkId
+                         AND origin.codebase_id = :codebaseId
+                         AND c.codebase_id = origin.codebase_id
+                         AND c.path = origin.path
+                         AND c.chunk_index BETWEEN origin.chunk_index - :radius AND origin.chunk_index + :radius
+                        ORDER BY c.chunk_index
+                        """.formatted(CHUNK_COLUMNS))
+                .param("codebaseId", codebaseId)
+                .param("chunkId", chunkId)
+                .param("radius", Math.max(0, radius))
+                .query(this::mapChunk)
+                .list();
+    }
+
+    @Override
     public List<SimilaritySearchResult> similaritySearch(
             SimilaritySearchRequest request
     ) {
