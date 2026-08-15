@@ -138,9 +138,9 @@ graph TB
     useChatStream --> SSEListener
 
     AxiosClient <--> TokenMgr
-    AxiosClient -->|Bearer JWT| AuthRoutes
-    AxiosClient -->|Bearer JWT| CodebaseRoutes
-    SSEListener -->|Bearer JWT| StreamRoute
+    AxiosClient -->|"Bearer JWT"| AuthRoutes
+    AxiosClient -->|"Bearer JWT"| CodebaseRoutes
+    SSEListener -->|"Bearer JWT"| StreamRoute
 ```
 
 ---

@@ -55,56 +55,88 @@ It leverages:
 ### Layered System Architecture
 
 ```mermaid
-graph TD
-    subgraph WebLayer["REST & Reactive Streaming Controllers"]
-        AC["AuthController"]
-        CC["CodebaseController"]
-        ChatC["ChatController (SSE Flux)"]
-    end
-
-    subgraph SecurityLayer["Security & Filters"]
-        JF["JwtFilter"]
-        RF["RateLimiterFilter (Bucket4j + Redis)"]
-        UH["UnauthorizedResponseHandler"]
-        GEH["GlobalExceptionHandler"]
+flowchart TB
+    subgraph WebSecurityLayer["Web & Security Layer"]
+        direction TB
+        subgraph Security["Security & Filters"]
+            JF["JwtFilter"]
+            RF["RateLimiterFilter<br/>(Bucket4j + Redis)"]
+            UH["UnauthorizedResponseHandler"]
+            GEH["GlobalExceptionHandler"]
+        end
+        subgraph Controllers["REST & Reactive Controllers"]
+            AC["AuthController"]
+            CC["CodebaseController"]
+            ChatC["ChatController<br/>(Reactive SSE Flux)"]
+        end
     end
 
     subgraph BusinessLayer["Core Domain Services"]
-        AS["AuthService"]
-        RTS["RefreshTokenService"]
-        CBS["CodebaseService"]
-        GS["GitService (JGit)"]
-        RFP["RepositoryFileProcessor"]
-        ES["EmbeddingService"]
-        CR["CodeRetriever (Hybrid)"]
-        RRF["RrfReranker (k=60)"]
-        CS["ChatService"]
-        CTS["ChatTitleService"]
-        CMS["ChatMessageService"]
-        CSS["ChatSessionService"]
+        direction TB
+        subgraph AuthDomain["Auth & Identity"]
+            AS["AuthService"]
+            RTS["RefreshTokenService"]
+        end
+        subgraph CodebaseDomain["Ingestion & Indexing"]
+            CBS["CodebaseService"]
+            GS["GitService (JGit)"]
+            RFP["RepositoryFileProcessor"]
+            ES["EmbeddingService"]
+        end
+        subgraph RetrievalDomain["Hybrid Retrieval & RRF"]
+            CR["CodeRetriever (Hybrid)"]
+            RRF["RrfReranker (k=60)"]
+        end
+        subgraph ChatDomain["Chat & Orchestration"]
+            CS["ChatService"]
+            CTS["ChatTitleService"]
+            CMS["ChatMessageService"]
+            CSS["ChatSessionService"]
+        end
     end
 
-    subgraph AdvisorAndTools["Spring AI Integration"]
-        CA["CodeAdvisor (CallAdvisor & StreamAdvisor)"]
-        CLT["CodeLookupTools (@Tool read_more_code, search_code)"]
-        ChatClient["ChatClient (Spring AI)"]
+    subgraph SpringAILayer["Spring AI & Agentic Layer"]
+        CA["CodeAdvisor<br/>(Call & Stream Advisor)"]
+        CLT["CodeLookupTools<br/>(@Tool read_more_code / search)"]
+        ChatClient["ChatClient<br/>(Spring AI 2.0.0)"]
     end
 
-    subgraph DataAccessLayer["Repositories & Custom JDBC"]
-        UR["UserRepository"]
-        RTR["RefreshTokenRepository"]
-        CBR["CodebaseRepository"]
-        RFR["RepositoryFileRepository"]
-        CCR["CodeChunkRepositoryImpl (PGhalfvec + FTS)"]
-        CSR["ChatSessionRepository"]
-        CMR["ChatMessageRepository"]
+    subgraph DataAccessLayer["Repositories & Persistence Layer"]
+        subgraph Repositories["PostgreSQL Repositories"]
+            UR["UserRepository"]
+            RTR["RefreshTokenRepository"]
+            CBR["CodebaseRepository"]
+            RFR["RepositoryFileRepository"]
+            CCR["CodeChunkRepositoryImpl<br/>(PGhalfvec + FTS)"]
+            CSR["ChatSessionRepository"]
+            CMR["ChatMessageRepository"]
+        end
+        subgraph RedisStore["In-Memory Cache"]
+            Redis["Redis Token Bucket"]
+        end
     end
 
-    WebLayer --> SecurityLayer
-    SecurityLayer --> BusinessLayer
-    BusinessLayer --> AdvisorAndTools
-    AdvisorAndTools --> ChatClient
-    BusinessLayer --> DataAccessLayer
+    %% Flow connections
+    Security --> Controllers
+    AC --> AuthDomain
+    CC --> CodebaseDomain
+    ChatC --> ChatDomain
+
+    ChatDomain --> SpringAILayer
+    SpringAILayer --> RetrievalDomain
+    RetrievalDomain --> CCR
+
+    AuthDomain --> UR
+    AuthDomain --> RTR
+    CodebaseDomain --> CBR
+    CodebaseDomain --> RFR
+    CodebaseDomain --> CCR
+    ChatDomain --> CSR
+    ChatDomain --> CMR
+    RF --> Redis
+
+    CA --> ChatClient
+    CLT --> CCR
 ```
 
 ---

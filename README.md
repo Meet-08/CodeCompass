@@ -83,24 +83,24 @@ graph TB
 
     UI --> Router
     Router --> Query
-    Query -->|REST API / Bearer Token| JwtFilter
-    SSEClient -->|SSE Connection| JwtFilter
+    Query -->|"REST API / Bearer Token"| JwtFilter
+    SSEClient -->|"SSE Connection"| JwtFilter
     JwtFilter --> RateLimiter
     RateLimiter --> CoreBackend
     OAuth2 --> AuthSvc
 
-    CodebaseSvc -->|Shallow Clone| IndexEngine
-    IndexEngine -->|Extract AST Chunks| Embeddings
-    Embeddings -->|Generate Vectors| IndexEngine
-    IndexEngine -->|Batch Upsert| PGVector
-    IndexEngine -->|Upsert Full Text| FTSIndex
+    CodebaseSvc -->|"Shallow Clone"| IndexEngine
+    IndexEngine -->|"Extract AST Chunks"| Embeddings
+    Embeddings -->|"Generate Vectors"| IndexEngine
+    IndexEngine -->|"Batch Upsert"| PGVector
+    IndexEngine -->|"Upsert Full Text"| FTSIndex
 
-    ChatEngine -->|Hybrid Query (Parallel)| PGVector
-    ChatEngine -->|Hybrid Query (Parallel)| FTSIndex
-    ChatEngine -->|RRF Fusion & Context Injection| Ollama
-    Ollama -->|Tool Call Trigger| Tools
-    Tools -->|Expand Surrounding Lines| PGVector
-    ChatEngine -->|SSE Stream (Tokens, Citations, Title)| SSEClient
+    ChatEngine -->|"Hybrid Query (Parallel)"| PGVector
+    ChatEngine -->|"Hybrid Query (Parallel)"| FTSIndex
+    ChatEngine -->|"RRF Fusion & Context Injection"| Ollama
+    Ollama -->|"Tool Call Trigger"| Tools
+    Tools -->|"Expand Surrounding Lines"| PGVector
+    ChatEngine -->|"SSE Stream (Tokens, Citations, Title)"| SSEClient
 ```
 
 ---
@@ -142,7 +142,7 @@ sequenceDiagram
         Parser-->>Processor: ParsedFile (AST Root TSNode)
         Processor->>Extractor: extract(parsedFile)
         Note over Extractor: Extract Semantic Chunks (Classes, Methods, Interfaces) + Preserve Context
-        Extractor-->>Processor: List<CodeChunk>
+        Extractor-->>Processor: List[CodeChunk]
         Processor->>EmbedSvc: embedChunks(chunks)
         EmbedSvc->>DB: Batch Insert code_chunks with PGhalfvec embeddings & FTS tokens
     end
@@ -176,7 +176,7 @@ sequenceDiagram
 
     Advisor->>Retriever: retrieve(codebaseId, query)
     par Parallel Signal Search
-        Retriever->>PG: Vector Similarity (<=> Cosine Distance, Top 30)
+        Retriever->>PG: Vector Similarity (Cosine Distance, Top 30)
     and
         Retriever->>PG: Full-Text Search (ts_rank_cd, Top 30)
     end
